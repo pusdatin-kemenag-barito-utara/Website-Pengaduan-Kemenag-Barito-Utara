@@ -1,7 +1,9 @@
--- Schema SQL untuk SI-GESIT (Pengaduan Kemenag)
--- Silakan jalankan script ini di Supabase SQL Editor
+-- Schema SQL untuk SI-GESIT (Pengaduan Kemenag Barito Utara)
+-- Schema: kemenag-pengaduan
 
-CREATE TABLE IF NOT EXISTS public.pengaduan (
+CREATE SCHEMA IF NOT EXISTS "kemenag-pengaduan";
+
+CREATE TABLE IF NOT EXISTS "kemenag-pengaduan".pengaduan (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ticket_number VARCHAR(30) UNIQUE NOT NULL,
   category VARCHAR(50) NOT NULL, -- Saran, Masukan, Pengaduan, Keluhan, Informasi, Tanggapan
@@ -17,21 +19,19 @@ CREATE TABLE IF NOT EXISTS public.pengaduan (
 );
 
 -- Indexing untuk kecepatan query
-CREATE INDEX IF NOT EXISTS idx_pengaduan_ticket ON public.pengaduan(ticket_number);
-CREATE INDEX IF NOT EXISTS idx_pengaduan_category ON public.pengaduan(category);
-CREATE INDEX IF NOT EXISTS idx_pengaduan_created_at ON public.pengaduan(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pengaduan_ticket ON "kemenag-pengaduan".pengaduan(ticket_number);
+CREATE INDEX IF NOT EXISTS idx_pengaduan_category ON "kemenag-pengaduan".pengaduan(category);
+CREATE INDEX IF NOT EXISTS idx_pengaduan_created_at ON "kemenag-pengaduan".pengaduan(created_at DESC);
 
 -- Enable RLS (Row Level Security)
-ALTER TABLE public.pengaduan ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "kemenag-pengaduan".pengaduan ENABLE ROW LEVEL SECURITY;
 
--- Allow public insertion
-CREATE POLICY "Allow public insert" ON public.pengaduan
+-- Allow public insertion & selection
+CREATE POLICY "Allow public insert" ON "kemenag-pengaduan".pengaduan
   FOR INSERT WITH CHECK (true);
 
--- Allow public to select by ticket_number
-CREATE POLICY "Allow public select by ticket" ON public.pengaduan
+CREATE POLICY "Allow public select by ticket" ON "kemenag-pengaduan".pengaduan
   FOR SELECT USING (true);
 
--- Allow all operations for admin/anon during dev
-CREATE POLICY "Allow full access for authenticated/anon users" ON public.pengaduan
+CREATE POLICY "Allow full access for authenticated/anon users" ON "kemenag-pengaduan".pengaduan
   FOR ALL USING (true);

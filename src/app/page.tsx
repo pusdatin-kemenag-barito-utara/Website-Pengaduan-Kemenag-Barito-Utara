@@ -478,7 +478,7 @@ export default function PublicPage() {
                 Verifikasi Keamanan Bot (Cloudflare Turnstile)
               </p>
               <Turnstile
-                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAADR1O_LSp1lgc3km'}
                 onSuccess={(token) => setTurnstileToken(token)}
                 options={{ theme: 'dark' }}
               />
