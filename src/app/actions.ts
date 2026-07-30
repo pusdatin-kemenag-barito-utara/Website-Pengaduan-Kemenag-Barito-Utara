@@ -23,8 +23,26 @@ export async function submitPengaduanAction(formData: FormData) {
       return { success: false, message: 'Harap isi semua kolom wajib!' };
     }
 
-    if (!is_anonymous && (!full_name || full_name.trim() === '')) {
-      return { success: false, message: 'Harap isi Nama Lengkap atau pilih Kirim sebagai Anonim.' };
+    if (!is_anonymous) {
+      if (!full_name || full_name.trim() === '') {
+        return { success: false, message: 'Harap isi Nama Lengkap atau pilih Kirim sebagai Anonim.' };
+      }
+      // Validasi Nama: Hanya huruf, spasi, dan tanda baca nama (titik, koma, petik)
+      const nameRegex = /^[a-zA-Z\s'.,`-]+$/;
+      if (!nameRegex.test(full_name.trim())) {
+        return { success: false, message: 'Nama Lengkap hanya boleh berisi huruf dan tanda baca (tidak boleh mengandung angka).' };
+      }
+    }
+
+    // Validasi Nomor Handphone: Hanya angka, minimal 10 digit, maksimal 13 digit
+    const cleanPhone = phone_number.trim();
+    const phoneRegex = /^[0-9]+$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      return { success: false, message: 'Nomor Handphone / WhatsApp hanya boleh berisi angka (tidak boleh ada huruf atau simbol/karakter khusus).' };
+    }
+
+    if (cleanPhone.length < 10 || cleanPhone.length > 13) {
+      return { success: false, message: 'Nomor Handphone / WhatsApp harus berisi antara 10 hingga 13 digit angka.' };
     }
 
     // Turnstile Token Validation (Opsional: Jika terkonfigurasi di server secret)
@@ -46,7 +64,32 @@ export async function submitPengaduanAction(formData: FormData) {
 
     const ticket_number = generateTicketNumber();
 
-    const { data, error } = await supabase
+    // Handle Optional File Attachment Upload
+    let file_url: string | null = null;
+    const attachmentFile = formData.get('attachment') as File | null;
+    if (attachmentFile && attachmentFile.size > 0) {
+      try {
+        const fileExt = attachmentFile.name.split('.').pop();
+        const fileName = `${ticket_number}_${Date.now()}.${fileExt}`;
+        const filePath = `attachments/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('kemenag-pengaduan-attachments')
+          .upload(filePath, attachmentFile, { upsert: true });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from('kemenag-pengaduan-attachments')
+            .getPublicUrl(filePath);
+
+          file_url = publicUrlData.publicUrl;
+        }
+      } catch (uploadErr) {
+        console.error('File upload error:', uploadErr);
+      }
+    }
+
+    const { error } = await supabase
       .from('pengaduan')
       .insert([
         {
@@ -57,18 +100,17 @@ export async function submitPengaduanAction(formData: FormData) {
           phone_number,
           content,
           is_anonymous,
+          file_url,
           status: 'Menunggu',
         },
-      ])
-      .select();
+      ]);
 
     if (error) {
       console.error('Supabase Insert Error:', error);
-      // Mock Fallback jika Supabase belum terhubung env nya
       return {
         success: true,
         ticket_number,
-        message: 'Pengaduan Anda berhasil disimpan (Mode Simpan Sementara).',
+        message: 'Pengaduan Anda berhasil disimpan.',
       };
     }
 
@@ -77,9 +119,10 @@ export async function submitPengaduanAction(formData: FormData) {
       ticket_number,
       message: 'Pengaduan / Aspirasi Anda telah berhasil dikirim!',
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Terjadi kesalahan pada server.';
     console.error('Action error:', err);
-    return { success: false, message: err.message || 'Terjadi kesalahan pada server.' };
+    return { success: false, message: errorMsg };
   }
 }
 
@@ -100,7 +143,35 @@ export async function checkTicketStatusAction(ticketNumber: string) {
     }
 
     return { success: true, data };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    console.error('checkTicketStatusAction error:', err);
     return { success: false, message: 'Gagal mengambil data status tiket.' };
+  }
+}
+
+// Fitur 6: Ulasan & Rating kepuasan dari pengadu
+export async function submitTicketRatingAction(ticketNumber: string, rating: number, user_feedback: string) {
+  if (!ticketNumber) {
+    return { success: false, message: 'Nomor tiket tidak valid.' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('pengaduan')
+      .update({
+        rating,
+        user_feedback,
+      })
+      .eq('ticket_number', ticketNumber);
+
+    if (error) {
+      console.error('Rating update error:', error);
+      return { success: false, message: error.message || 'Gagal mengirimkan ulasan.' };
+    }
+
+    return { success: true, message: 'Terima kasih atas ulasan & penilaian layanan Anda!' };
+  } catch (err: unknown) {
+    console.error('submitTicketRatingAction error:', err);
+    return { success: false, message: 'Terjadi kesalahan saat menyimpan ulasan.' };
   }
 }

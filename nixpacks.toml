@@ -1,0 +1,10 @@
+providers:
+  - node
+build:
+  cmds:
+    - npm ci
+    - npm run build
+start:
+  cmd: node .next/standalone/server.js
+variables:
+  NIXPACKS_NODE_VERSION: "20"

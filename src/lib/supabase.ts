@@ -21,6 +21,9 @@ export interface Pengaduan {
   is_anonymous: boolean;
   status: 'Menunggu' | 'Diproses' | 'Selesai' | 'Ditolak';
   admin_response?: string | null;
+  file_url?: string | null;
+  rating?: number | null;
+  user_feedback?: string | null;
   created_at?: string;
   updated_at?: string;
 }

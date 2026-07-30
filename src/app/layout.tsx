@@ -9,8 +9,13 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "SI-GESIT - Sistem Informasi Gagasan, Evaluasi, Saran, Informasi dan Tanggapan Kemenag",
-  description: "Layanan Pengaduan, Masukan, Saran, dan Informasi Masyarakat Kementerian Agama RI",
+  title: "SI-GESIT - Sistem Informasi Gagasan, Evaluasi, Saran, Informasi dan Tanggapan Kemenag Barito Utara",
+  description: "Layanan Pengaduan, Masukan, Saran, dan Informasi Masyarakat Kantor Kementerian Agama Kabupaten Barito Utara",
+  icons: {
+    icon: "/kemenag.svg",
+    shortcut: "/kemenag.svg",
+    apple: "/kemenag.svg",
+  },
 };
 
 export default function RootLayout({
