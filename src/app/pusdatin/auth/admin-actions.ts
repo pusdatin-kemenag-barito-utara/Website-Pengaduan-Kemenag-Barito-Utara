@@ -47,7 +47,8 @@ export async function getAdminPengaduanListAction() {
     }
 
     return { success: true, data: data as Pengaduan[] };
-  } catch (err: any) {
+  } catch (err) {
+    console.error('getAdminPengaduanListAction error:', err);
     return { success: false, message: 'Gagal mengambil data pengaduan.' };
   }
 }
@@ -55,15 +56,14 @@ export async function getAdminPengaduanListAction() {
 // Update status & respon admin
 export async function updatePengaduanStatusAction(id: string, status: Pengaduan['status'], admin_response: string) {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('pengaduan')
       .update({
         status,
         admin_response,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', id)
-      .select();
+      .eq('id', id);
 
     if (error) {
       console.error('Update error:', error);
@@ -71,7 +71,8 @@ export async function updatePengaduanStatusAction(id: string, status: Pengaduan[
     }
 
     return { success: true, message: 'Status dan tanggapan berhasil diperbarui!' };
-  } catch (err: any) {
+  } catch (err) {
+    console.error('updatePengaduanStatusAction error:', err);
     return { success: false, message: 'Gagal memperbarui status pengaduan.' };
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { getAdminPengaduanListAction, updatePengaduanStatusAction } from './admin-actions';
 import { Pengaduan } from '@/lib/supabase';
 import {
@@ -8,22 +9,12 @@ import {
   User,
   KeyRound,
   LogOut,
-  ShieldCheck,
   Search,
-  Filter,
   RefreshCw,
   CheckCircle,
   Clock,
-  XCircle,
   AlertCircle,
-  MessageSquare,
-  Building2,
-  FileText,
-  UserCheck,
-  UserX,
-  Phone,
-  ChevronRight,
-  Sparkles
+  FileText
 } from 'lucide-react';
 
 export default function AdminAuthPage() {
@@ -170,9 +161,9 @@ export default function AdminAuthPage() {
           </form>
 
           <div className="text-center pt-2 border-t border-slate-800">
-            <a href="/" className="text-xs text-slate-400 hover:text-emerald-400 transition-colors">
+            <Link href="/" className="text-xs text-slate-400 hover:text-emerald-400 transition-colors">
               ← Kembali ke Halaman Utama SI-GESIT
-            </a>
+            </Link>
           </div>
         </div>
       </div>
