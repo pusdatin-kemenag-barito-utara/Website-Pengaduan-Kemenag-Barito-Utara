@@ -10,6 +10,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
+
+export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+  db: {
+    schema: supabaseSchema,
+  },
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+});
+
 export interface Pengaduan {
   id?: string;
   ticket_number: string;
@@ -24,6 +36,16 @@ export interface Pengaduan {
   file_url?: string | null;
   rating?: number | null;
   user_feedback?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Layanan {
+  id?: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+  order_index?: number;
   created_at?: string;
   updated_at?: string;
 }

@@ -1,12 +1,55 @@
 'use server';
 
-import { supabase, Pengaduan } from '@/lib/supabase';
+import { supabase, supabaseAdmin, Pengaduan } from '@/lib/supabase';
+import { uploadToR2, getR2SignedUrl, isR2Path } from '@/lib/r2';
 
 // Generate Random Ticket ID (misal: SGT-20260731-9821)
 function generateTicketNumber(): string {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const randomNum = Math.floor(1000 + Math.random() * 9000);
   return `SGT-${dateStr}-${randomNum}`;
+}
+
+// Anti-Brute-Force Rate Limiter Store (Maksimal 3 pengiriman per 5 menit per nomor HP/IP)
+const submissionTracker = new Map<string, number[]>();
+
+function checkRateLimit(identifier: string): { allowed: boolean; waitSeconds?: number } {
+  const now = Date.now();
+  const windowMs = 5 * 60 * 1000; // 5 menit window
+  const maxSubmissions = 3; // Maksimal 3 laporan per 5 menit
+
+  const timestamps = (submissionTracker.get(identifier) || []).filter(ts => now - ts < windowMs);
+
+  if (timestamps.length >= maxSubmissions) {
+    const oldest = timestamps[0];
+    const waitSeconds = Math.ceil((windowMs - (now - oldest)) / 1000);
+    return { allowed: false, waitSeconds };
+  }
+
+  timestamps.push(now);
+  submissionTracker.set(identifier, timestamps);
+  return { allowed: true };
+}
+
+// Anti-Enumeration Rate Limiter untuk fitur Lacak Tiket (Maks 10 pencarian per menit)
+const searchTracker = new Map<string, number[]>();
+
+function checkSearchRateLimit(identifier: string): { allowed: boolean; waitSeconds?: number } {
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 menit window
+  const maxSearches = 10; // Maksimal 10 pencarian per menit
+
+  const timestamps = (searchTracker.get(identifier) || []).filter(ts => now - ts < windowMs);
+
+  if (timestamps.length >= maxSearches) {
+    const oldest = timestamps[0];
+    const waitSeconds = Math.ceil((windowMs - (now - oldest)) / 1000);
+    return { allowed: false, waitSeconds };
+  }
+
+  timestamps.push(now);
+  searchTracker.set(identifier, timestamps);
+  return { allowed: true };
 }
 
 export async function submitPengaduanAction(formData: FormData) {
@@ -45,47 +88,81 @@ export async function submitPengaduanAction(formData: FormData) {
       return { success: false, message: 'Nomor Handphone / WhatsApp harus berisi antara 10 hingga 13 digit angka.' };
     }
 
-    // Turnstile Token Validation (Opsional: Jika terkonfigurasi di server secret)
-    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
-    if (turnstileSecret && turnstileSecret !== '1x000000000000000000000000000000AA' && turnstileToken) {
-      const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          secret: turnstileSecret,
-          response: turnstileToken,
-        }),
-      });
-      const verifyData = await verifyRes.json();
-      if (!verifyData.success) {
-        return { success: false, message: 'Verifikasi keamanan Turnstile gagal. Silakan coba lagi.' };
+    // Protection 1: Anti-Spam / Anti-Brute-Force Rate Limiting (Maksimal 3 pengajuan per 5 menit)
+    const rateCheck = checkRateLimit(cleanPhone);
+    if (!rateCheck.allowed) {
+      return {
+        success: false,
+        message: `Deteksi pengiriman berulang! Demi keamanan sistem dari Spam/Bot, harap tunggu ${rateCheck.waitSeconds} detik lagi sebelum mengirim pengaduan baru.`,
+      };
+    }
+
+    // Protection 2: Turnstile Token Enforcement
+    if (!turnstileToken) {
+      return { success: false, message: 'Verifikasi keamanan Cloudflare Turnstile (Anti-Bot) diperlukan!' };
+    }
+
+    // Turnstile Token Validation dengan Cloudflare Siteverify API
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
+    if (turnstileSecret && turnstileToken) {
+      try {
+        const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `secret=${encodeURIComponent(turnstileSecret)}&response=${encodeURIComponent(turnstileToken)}`,
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyData.success && process.env.TURNSTILE_SECRET_KEY) {
+          return { success: false, message: 'Verifikasi keamanan Turnstile gagal. Silakan muat ulang halaman dan coba lagi.' };
+        }
+      } catch (captchaErr) {
+        console.warn('Turnstile verification bypass in dev:', captchaErr);
       }
     }
 
     const ticket_number = generateTicketNumber();
 
-    // Handle Optional File Attachment Upload
+    // Handle Optional File Attachment Upload to Cloudflare R2 Storage (Bucket: data-pengaduan)
     let file_url: string | null = null;
     const attachmentFile = formData.get('attachment') as File | null;
     if (attachmentFile && attachmentFile.size > 0) {
+      // Validasi Ukuran Berkas Maksimal 5MB (5 * 1024 * 1024 bytes)
+      if (attachmentFile.size > 5 * 1024 * 1024) {
+        return {
+          success: false,
+          message: `Ukuran file lampiran (${(attachmentFile.size / (1024 * 1024)).toFixed(2)} MB) melebihi batas maksimal 5 MB. Harap pilih berkas yang lebih kecil.`
+        };
+      }
+
       try {
-        const fileExt = attachmentFile.name.split('.').pop();
+        const fileExt = attachmentFile.name.split('.').pop() || 'bin';
         const fileName = `${ticket_number}_${Date.now()}.${fileExt}`;
-        const filePath = `attachments/${fileName}`;
+        const filePath = `pengaduan/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from('kemenag-pengaduan-attachments')
-          .upload(filePath, attachmentFile, { upsert: true });
-
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage
-            .from('kemenag-pengaduan-attachments')
-            .getPublicUrl(filePath);
-
-          file_url = publicUrlData.publicUrl;
-        }
+        // Direct upload to Cloudflare R2 Storage (Bucket: data-pengaduan)
+        file_url = await uploadToR2(attachmentFile, filePath);
       } catch (uploadErr) {
-        console.error('File upload error:', uploadErr);
+        console.error('Cloudflare R2 upload error:', uploadErr);
+        // Fallback to Supabase Storage if R2 fails
+        try {
+          const fileExt = attachmentFile.name.split('.').pop();
+          const fileName = `${ticket_number}_${Date.now()}.${fileExt}`;
+          const filePath = `attachments/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('kemenag-pengaduan-attachments')
+            .upload(filePath, attachmentFile, { upsert: true });
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+              .from('kemenag-pengaduan-attachments')
+              .getPublicUrl(filePath);
+
+            file_url = publicUrlData.publicUrl;
+          }
+        } catch (fbErr) {
+          console.error('Fallback upload error:', fbErr);
+        }
       }
     }
 
@@ -100,18 +177,15 @@ export async function submitPengaduanAction(formData: FormData) {
           phone_number,
           content,
           is_anonymous,
-          file_url,
           status: 'Menunggu',
+          file_url,
+          created_at: new Date().toISOString(),
         },
       ]);
 
     if (error) {
-      console.error('Supabase Insert Error:', error);
-      return {
-        success: true,
-        ticket_number,
-        message: 'Pengaduan Anda berhasil disimpan.',
-      };
+      console.error('Insert error:', error);
+      return { success: false, message: error.message || 'Gagal menyimpan pengaduan ke database.' };
     }
 
     return {
@@ -126,23 +200,53 @@ export async function submitPengaduanAction(formData: FormData) {
   }
 }
 
-export async function checkTicketStatusAction(ticketNumber: string) {
+export async function checkTicketStatusAction(ticketNumber: string, clientHint?: string) {
   if (!ticketNumber || ticketNumber.trim() === '') {
     return { success: false, message: 'Nomor Tiket tidak boleh kosong!' };
+  }
+
+  // Validasi Format Nomor Tiket: hanya terima format SGT-YYYYMMDD-XXXX
+  const ticketFormatRegex = /^SGT-\d{8}-\d{1,6}$/i;
+  const cleanTicket = ticketNumber.trim().toUpperCase();
+  if (!ticketFormatRegex.test(cleanTicket)) {
+    return {
+      success: false,
+      message: 'Format nomor tiket tidak valid. Gunakan format: SGT-YYYYMMDD-XXXX (contoh: SGT-20260802-1001)',
+    };
+  }
+
+  // Rate Limiting Anti-Enumeration (10 pencarian per menit per identifier)
+  const identifier = clientHint || 'anonymous';
+  const rateCheck = checkSearchRateLimit(identifier);
+  if (!rateCheck.allowed) {
+    return {
+      success: false,
+      message: `Terlalu banyak permintaan pencarian. Sistem mendeteksi aktivitas tidak wajar. Harap tunggu ${rateCheck.waitSeconds} detik sebelum mencoba kembali.`,
+    };
   }
 
   try {
     const { data, error } = await supabase
       .from('pengaduan')
       .select('*')
-      .eq('ticket_number', ticketNumber.trim().toUpperCase())
+      .eq('ticket_number', cleanTicket)
       .single();
 
     if (error || !data) {
-      return { success: false, message: `Tiket dengan nomor ${ticketNumber} tidak ditemukan.` };
+      return { success: false, message: `Tiket dengan nomor ${cleanTicket} tidak ditemukan di sistem SI-GESIT.` };
     }
 
-    return { success: true, data };
+    // Resolve Cloudflare R2 Presigned Download URL if stored in R2
+    let fileUrlResolved = data.file_url;
+    if (isR2Path(data.file_url)) {
+      try {
+        fileUrlResolved = await getR2SignedUrl(data.file_url!);
+      } catch (r2Err) {
+        console.error('Failed to generate R2 signed url:', r2Err);
+      }
+    }
+
+    return { success: true, data: { ...data, file_url: fileUrlResolved } };
   } catch (err: unknown) {
     console.error('checkTicketStatusAction error:', err);
     return { success: false, message: 'Gagal mengambil data status tiket.' };
@@ -155,18 +259,28 @@ export async function submitTicketRatingAction(ticketNumber: string, rating: num
     return { success: false, message: 'Nomor tiket tidak valid.' };
   }
 
+  if (rating < 1 || rating > 5) {
+    return { success: false, message: 'Nilai rating tidak valid (harus antara 1-5).' };
+  }
+
   try {
-    const { error } = await supabase
+    // Gunakan supabaseAdmin (service role) agar tidak diblokir RLS Supabase
+    const { error, data } = await supabaseAdmin
       .from('pengaduan')
       .update({
         rating,
-        user_feedback,
+        user_feedback: user_feedback.trim() || null,
       })
-      .eq('ticket_number', ticketNumber);
+      .eq('ticket_number', ticketNumber.trim().toUpperCase())
+      .select('id');
 
     if (error) {
       console.error('Rating update error:', error);
       return { success: false, message: error.message || 'Gagal mengirimkan ulasan.' };
+    }
+
+    if (!data || data.length === 0) {
+      return { success: false, message: 'Tiket tidak ditemukan atau ulasan gagal disimpan.' };
     }
 
     return { success: true, message: 'Terima kasih atas ulasan & penilaian layanan Anda!' };
