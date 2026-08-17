@@ -50,10 +50,14 @@ func New(deps Deps) http.Handler {
 		})
 	})
 
+	healthHandler := health.New(deps.Cfg, deps.DB, deps.Log, Version)
+	r.Get("/health", healthHandler.Health)
+	r.Get("/api/health", healthHandler.Health)
+
 	r.Route("/api/v1", func(api chi.Router) {
 		api.Use(chimw.RealIP)
 
-		health.New(deps.Cfg, deps.DB, deps.Log, Version).Register(api)
+		healthHandler.Register(api)
 
 		if deps.DB == nil {
 			return
