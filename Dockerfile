@@ -48,7 +48,7 @@ RUN npm run build
 # Stage 4: Production Runtime (Unified Single Container)
 # ===================================================
 FROM node:22-alpine AS runner
-RUN apk add --no-cache ca-certificates tzdata wget
+RUN apk add --no-cache ca-certificates tzdata wget dos2unix
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -58,6 +58,7 @@ ENV BACKEND_INTERNAL_URL=http://127.0.0.1:8080
 
 # Salin Executable Backend Go
 COPY --from=backend-builder /out/api /app/backend-api
+RUN chmod +x /app/backend-api
 
 # Salin File Hasil Build & Dependencies Frontend Astro
 COPY --from=frontend-builder /src/frontend/dist /app/frontend/dist
@@ -66,7 +67,7 @@ COPY --from=frontend-builder /src/frontend/package.json /app/frontend/package.js
 
 # Salin & Beri Izin Script Entrypoint
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+RUN dos2unix /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 3000
 
