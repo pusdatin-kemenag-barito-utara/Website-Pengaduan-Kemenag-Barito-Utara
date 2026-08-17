@@ -1,0 +1,22 @@
+# Konfigurasi Air (live-reload Go) — backend SI-GESIT
+# Dipanggil dari root monorepo: npm run dev
+# Rebuild otomatis setiap ada perubahan file .go
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/main.exe ./cmd/api"
+  bin = "./tmp/main.exe"
+  include_ext = ["go"]
+  exclude_dir = ["tmp"]
+  delay = 1000
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = 500
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

@@ -1,0 +1,7 @@
+# Robots.txt — SI-GESIT Kemenag Barito Utara
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://pengaduan.kemenag-baritoutara.com/sitemap.xml

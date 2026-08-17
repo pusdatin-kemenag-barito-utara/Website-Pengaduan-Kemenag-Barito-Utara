@@ -1,0 +1,11 @@
+# SI-GESIT — Pengaduan & Aspirasi Kemenag Barito Utara
+> Platform Resmi Kantor Kementerian Agama Kabupaten Barito Utara, Kalimantan Tengah.
+
+## Ringkasan
+SI-GESIT (Sistem Informasi Gagasan, Evaluasi, Saran, Informasi dan Tanggapan) memfasilitasi pelaporan masyarakat, saran peningkatan pelayanan, serta permohonan informasi publik secara transparan, akuntabel, dan aman (mendukung pelaporan Anonim).
+
+## URL Resmi
+- Portal Utama: https://pengaduan.kemenag-baritoutara.com
+- Format Tiket: SGT-YYYYMMDD-XXXX
+- WhatsApp Helpdesk: +62 851-1749-1212
+- Jam Pelayanan: Senin - Kamis (07.30 - 16.00 WIB), Jumat (07.30 - 16.30 WIB)

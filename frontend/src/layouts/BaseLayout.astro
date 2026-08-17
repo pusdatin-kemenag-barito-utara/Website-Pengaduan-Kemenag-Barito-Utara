@@ -1,0 +1,115 @@
+---
+import '../styles/globals.css';
+import { PUBLIC_SITE_NAME, PUBLIC_SITE_DESCRIPTION, PUBLIC_SITE_URL, PUBLIC_OG_IMAGE } from '../consts';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  canonical?: string;
+}
+
+const {
+  title = PUBLIC_SITE_NAME,
+  description = PUBLIC_SITE_DESCRIPTION,
+  image = PUBLIC_OG_IMAGE,
+  canonical,
+} = Astro.props;
+
+const canonicalUrl = canonical || (Astro.url ? Astro.url.href : PUBLIC_SITE_URL);
+const gaId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID || 'G-56V7KYCD71';
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    {/* Basic Meta */}
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <meta name="robots" content="index, follow" />
+    <title>{title}</title>
+    <meta name="title" content={title} />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+
+    {/* Favicon & Multi-Resolution App Icons */}
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3" />
+    <link rel="shortcut icon" href="/favicon.ico?v=3" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3" />
+
+    {/* PWA Manifest & App Config */}
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#047857" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="SI-GESIT" />
+    <meta name="application-name" content="SI-GESIT" />
+
+    {/* Open Graph / Facebook / WhatsApp */}
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:alt" content="SI-GESIT Kemenag Barito Utara" />
+    <meta property="og:site_name" content="SI-GESIT Kemenag Barito Utara" />
+    <meta property="og:locale" content="id_ID" />
+
+    {/* Twitter Cards */}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content={canonicalUrl} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+
+    {/* HTTP/3, DNS-Prefetch & Preconnect Optimization */}
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="dns-prefetch" href="https://www.google-analytics.com" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://challenges.cloudflare.com" />
+    <link rel="preconnect" href="https://www.googletagmanager.com" />
+
+    {/* Google Font API: Plus Jakarta Sans (Primary Display Font) */}
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,700&display=swap"
+    />
+
+    {/* Priority Hints: Preload Critical Assets */}
+    <link rel="preload" as="image" href="/pengaduan-v2.webp" fetchpriority="high" type="image/webp" />
+    <link rel="preload" as="image" href="/kemenag.svg" type="image/svg+xml" />
+
+    {/* Google Tag / Google Analytics 4 (GA4) */}
+    {gaId && (
+      <>
+        <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}></script>
+        <script is:inline define:vars={{ gaId }}>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', gaId, {
+            send_page_view: true,
+          });
+        </script>
+      </>
+    )}
+  </head>
+  <body>
+    <slot />
+    <script is:inline>
+      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>

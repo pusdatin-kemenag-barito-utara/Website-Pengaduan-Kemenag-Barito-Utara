@@ -1,0 +1,10 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import NotFoundPage from '../components/NotFoundPage';
+
+const currentPath = Astro.url.pathname;
+---
+
+<BaseLayout title="404 - Halaman Tidak Ditemukan | SI-GESIT">
+  <NotFoundPage client:load currentPath={currentPath} />
+</BaseLayout>

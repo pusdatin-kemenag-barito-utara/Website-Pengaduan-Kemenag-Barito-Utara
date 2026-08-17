@@ -1,37 +1,14 @@
 {
-  "name": "pengaduan-kemenag",
-  "version": "0.1.0",
+  "name": "si-gesit",
+  "version": "1.0.0",
   "private": true,
+  "description": "SI-GESIT — Pengaduan Masyarakat Kemenag Barito Utara (dev orchestrator)",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@aws-sdk/client-s3": "^3.1101.0",
-    "@aws-sdk/s3-request-presigner": "^3.1101.0",
-    "@marsidev/react-turnstile": "^1.5.4",
-    "@supabase/ssr": "^0.12.4",
-    "@supabase/supabase-js": "^2.111.0",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
-    "lucide-react": "^1.28.0",
-    "next": "16.2.12",
-    "qrcode.react": "^4.2.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "xlsx": "^0.18.5"
+    "dev": "concurrently -k -n BE,FE -c yellow,cyan \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && go run github.com/air-verse/air@v1.67.4 -c .air.toml",
+    "dev:frontend": "cd frontend && npm run dev"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.12",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "concurrently": "^9.2.1"
   }
 }
