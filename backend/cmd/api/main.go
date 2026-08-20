@@ -31,9 +31,18 @@ func main() {
 	// Koneksi database (opsional saat pengembangan tanpa DATABASE_URL).
 	var db *database.DB
 	if cfg.DatabaseURL != "" {
-		db, err = database.Connect(ctx, cfg.DatabaseURL, cfg.AppSchema)
+		for attempt := 1; attempt <= 5; attempt++ {
+			connectCtx, connectCancel := context.WithTimeout(ctx, 5*time.Second)
+			db, err = database.Connect(connectCtx, cfg.DatabaseURL, cfg.AppSchema)
+			connectCancel()
+			if err == nil {
+				break
+			}
+			log.Warn("percobaan koneksi database gagal, mencoba lagi...", "attempt", attempt, "error", err)
+			time.Sleep(2 * time.Second)
+		}
 		if err != nil {
-			log.Error("gagal koneksi database", "error", err)
+			log.Error("gagal koneksi database setelah 5 percobaan", "error", err)
 			os.Exit(1)
 		}
 		defer db.Close()

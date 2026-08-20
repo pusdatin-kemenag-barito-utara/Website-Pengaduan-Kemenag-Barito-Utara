@@ -1,9 +1,16 @@
 #!/bin/sh
 set -e
 
-# Jalankan Backend Golang API di background (Port 8080 internal)
+# Jalankan Backend Golang API di background dengan auto-restart loop
 export PORT=8080
-/app/backend-api &
+(
+  while true; do
+    echo "[ENTRYPOINT] Menjalankan Backend Go..."
+    /app/backend-api || true
+    echo "[ENTRYPOINT] Backend Go berhenti, mencoba restart otomatis dalam 2 detik..."
+    sleep 2
+  done
+) &
 BACKEND_PID=$!
 
 echo "[ENTRYPOINT] Menunggu Backend Go aktif di port 8080..."
