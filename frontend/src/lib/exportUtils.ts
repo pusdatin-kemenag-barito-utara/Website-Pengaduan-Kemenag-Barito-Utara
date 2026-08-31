@@ -7,7 +7,7 @@ import type { AdminItem } from './apiAdmin';
  */
 export function exportToExcelXlsx(items: AdminItem[], _filterSummary?: string): void {
   const dateStr = new Date().toISOString().slice(0, 10);
-  const pkg = (XLSX as any).utils ? XLSX : (XLSX as any).default || XLSX;
+  const pkg = XLSX;
 
   // Format data baris untuk sheet Excel
   const rows = items.map((item, idx) => ({

@@ -56,6 +56,7 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV BACKEND_INTERNAL_URL=http://127.0.0.1:8080
+ENV ASTRO_NODE_LOGGING=disabled
 
 # Salin Executable Backend Go
 COPY --from=backend-builder /out/api /app/backend-api

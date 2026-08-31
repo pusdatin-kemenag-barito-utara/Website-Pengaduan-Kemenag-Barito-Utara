@@ -34,6 +34,7 @@ trap cleanup TERM INT
 export PORT=3000
 export HOST=0.0.0.0
 export BACKEND_INTERNAL_URL=http://127.0.0.1:8080
+export ASTRO_NODE_LOGGING=disabled
 
 cd /app/frontend
 exec node ./dist/server/entry.mjs
