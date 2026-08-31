@@ -17,6 +17,18 @@ export default defineConfig({
     optimizeDeps: {
       include: ['xlsx', 'jspdf', 'jspdf-autotable'],
     },
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:8080',
+          changeOrigin: true,
+        },
+        '/health': {
+          target: 'http://127.0.0.1:8080',
+          changeOrigin: true,
+        },
+      },
+    },
   },
   server: {
     port: 3000,

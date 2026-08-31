@@ -2,10 +2,12 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/config"
@@ -25,21 +27,29 @@ func testCfg() *config.Config {
 }
 
 func TestHealthWithoutDB(t *testing.T) {
-	h := New(Deps{Cfg: testCfg(), Log: testLog(), DB: nil})
+	app := New(Deps{Cfg: testCfg(), Log: testLog(), DB: nil})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503", rec.Code)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
 	}
+
+	if res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", res.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var body struct {
 		Status   string `json:"status"`
 		Database struct {
 			Connected bool `json:"connected"`
 		} `json:"database"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
 		t.Fatal(err)
 	}
 	if body.Status != "degraded" || body.Database.Connected {
@@ -48,15 +58,18 @@ func TestHealthWithoutDB(t *testing.T) {
 }
 
 func TestNotFoundJSON(t *testing.T) {
-	h := New(Deps{Cfg: testCfg(), Log: testLog(), DB: nil})
+	app := New(Deps{Cfg: testCfg(), Log: testLog(), DB: nil})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tidak-ada", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", rec.Code)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
-		t.Fatalf("content-type = %q", ct)
+
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", res.StatusCode)
+	}
+	if ct := res.Header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Fatalf("content-type = %q, want application/json", ct)
 	}
 }
 
@@ -73,12 +86,15 @@ func TestHealthWithDB(t *testing.T) {
 	}
 	defer db.Close()
 
-	h := New(Deps{Cfg: cfg, Log: testLog(), DB: db})
+	app := New(Deps{Cfg: cfg, Log: testLog(), DB: db})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+	if res.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(res.Body)
+		t.Fatalf("status = %d, want 200 (body: %s)", res.StatusCode, string(bodyBytes))
 	}
 }

@@ -1,27 +1,23 @@
 package auth
 
 import (
-	"net/http"
-
+	"github.com/gofiber/fiber/v3"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
 )
 
 // RequireAdmin memvalidasi cookie sesi dan menolak bila tidak sah.
 // Memperbaiki temuan audit K1/K2: otorisasi wajib di sisi server.
-func (h *Handler) RequireAdmin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(CookieName)
-		if err != nil || cookie.Value == "" {
-			httpx.WriteError(w, httpx.Unauthorized("unauthorized", "Sesi tidak valid."))
-			return
-		}
+func (h *Handler) RequireAdmin(c fiber.Ctx) error {
+	token := c.Cookies(CookieName)
+	if token == "" {
+		return httpx.WriteError(c, httpx.Unauthorized("unauthorized", "Sesi tidak valid."))
+	}
 
-		sess, err := h.svc.Lookup(r.Context(), cookie.Value)
-		if err != nil {
-			httpx.WriteError(w, httpx.Unauthorized("unauthorized", "Sesi tidak valid atau kedaluwarsa."))
-			return
-		}
+	sess, err := h.svc.Lookup(c.Context(), token)
+	if err != nil {
+		return httpx.WriteError(c, httpx.Unauthorized("unauthorized", "Sesi tidak valid atau kedaluwarsa."))
+	}
 
-		next.ServeHTTP(w, r.WithContext(WithSession(r.Context(), sess)))
-	})
+	c.Locals(sessionKey, sess)
+	return c.Next()
 }

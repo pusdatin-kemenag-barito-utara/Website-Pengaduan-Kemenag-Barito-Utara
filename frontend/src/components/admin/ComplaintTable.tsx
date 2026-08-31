@@ -4,7 +4,7 @@ import {
   Copy, Eye, FileDown, FileSpreadsheet, FileText, MessageCircle, RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
 import type { AdminItem, AdminStats } from '../../lib/apiAdmin';
-import { adminListPengaduan } from '../../lib/apiAdmin';
+import { adminCleanupStorage, adminListPengaduan } from '../../lib/apiAdmin';
 import { analytics } from '../../lib/analytics';
 import { CATEGORY_OPTIONS, ITEMS_PER_PAGE, STATUS_OPTIONS, categoryBadge, statusBadge } from './types';
 
@@ -50,6 +50,23 @@ export default function ComplaintTable({
   const [copiedTicket, setCopiedTicket] = useState<string | null>(null);
   const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [isCleaningStorage, setIsCleaningStorage] = useState<boolean>(false);
+
+  const handleCleanupStorage = async () => {
+    if (!confirm('Apakah Anda ingin memindai Cloudflare R2 dan menghapus semua berkas lampiran lama yang tiketnya sudah tidak ada di database?')) {
+      return;
+    }
+    setIsCleaningStorage(true);
+    try {
+      const res = await adminCleanupStorage();
+      alert(`Pembersihan R2 Selesai!\n\n• File sampah dihapus: ${res.deleted_count}\n• File aktif di database: ${res.active_count}\n• Total berkas di R2 sebelumnya: ${res.total_r2}`);
+      onFetchPengaduan(currentPage);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal membersihkan storage R2.');
+    } finally {
+      setIsCleaningStorage(false);
+    }
+  };
 
   const handleCopyTicket = (ticket: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -147,6 +164,16 @@ export default function ComplaintTable({
             className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm font-bold text-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
+          </button>
+          <button
+            type="button"
+            onClick={handleCleanupStorage}
+            disabled={isCleaningStorage}
+            className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm font-bold text-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-60"
+            title="Bersihkan Berkas Sampah di Cloudflare R2"
+          >
+            <Trash2 className={`w-3.5 h-3.5 text-slate-500 ${isCleaningStorage ? 'animate-spin' : ''}`} />
+            <span>{isCleaningStorage ? 'Membersihkan...' : 'Bersihkan R2'}</span>
           </button>
           <button
             type="button"
@@ -331,7 +358,7 @@ export default function ComplaintTable({
                     <td className="p-4 sm:p-5">
                       <div className="flex flex-col">
                         <div className="inline-flex items-center gap-1.5 group">
-                          <span className="font-mono font-black text-emerald-800 tracking-tight text-xs sm:text-sm">
+                          <span className="font-black text-emerald-800 tracking-tight text-xs sm:text-sm">
                             {item.ticket_number}
                           </span>
                           <button
@@ -381,7 +408,7 @@ export default function ComplaintTable({
                         item.full_name || '-'
                       )}
                     </td>
-                    <td className="p-4 sm:p-5 font-mono text-slate-600 font-medium">
+                    <td className="p-4 sm:p-5 text-slate-600 font-medium">
                       {item.phone_number}
                     </td>
                     <td className="p-4 sm:p-5">

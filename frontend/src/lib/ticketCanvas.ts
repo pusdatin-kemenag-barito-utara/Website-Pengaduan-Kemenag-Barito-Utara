@@ -48,20 +48,20 @@ export async function generateTicketPng(details: TicketDetails, qrContainer?: HT
   }
 
   ctx.fillStyle = '#334155';
-  ctx.font = 'bold 18px sans-serif';
+  ctx.font = 'bold 18px "Plus Jakarta Sans", sans-serif';
   ctx.fillText('KEMENTERIAN AGAMA REPUBLIK INDONESIA', 190, 115);
 
   ctx.fillStyle = '#022c22';
-  ctx.font = '900 24px sans-serif';
+  ctx.font = '900 24px "Plus Jakarta Sans", sans-serif';
   ctx.fillText('KANTOR KEMENTERIAN AGAMA KABUPATEN BARITO UTARA', 190, 150);
 
   ctx.fillStyle = '#334155';
-  ctx.font = 'bold 15px sans-serif';
+  ctx.font = 'bold 15px "Plus Jakarta Sans", sans-serif';
   ctx.fillText('Sistem Informasi Gagasan, Evaluasi, Saran, Informasi dan Tanggapan (SI-GESIT)', 190, 178);
 
   ctx.fillStyle = '#64748b';
-  ctx.font = '13px sans-serif';
-  ctx.fillText('Jl. Ahmad Yani No. 126 Muara Teweh, Kalimantan Tengah \u2022 Email: baritoutara@kemenag.go.id', 190, 202);
+  ctx.font = '13px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText('Jl. Ahmad Yani No. 126 Muara Teweh, Kalimantan Tengah • Email: baritoutara@kemenag.go.id', 190, 202);
 
   // Double Line Rule
   ctx.fillStyle = '#0f172a';
@@ -79,16 +79,16 @@ export async function generateTicketPng(details: TicketDetails, qrContainer?: HT
   ctx.stroke();
 
   ctx.fillStyle = '#94a3b8';
-  ctx.font = 'bold 16px sans-serif';
+  ctx.font = 'bold 16px "Plus Jakarta Sans", sans-serif';
   ctx.fillText('NOMOR TIKET RESMI SI-GESIT', 95, 305);
 
   ctx.fillStyle = '#34d399';
-  ctx.font = '900 44px monospace';
+  ctx.font = '900 44px "Plus Jakarta Sans", sans-serif';
   ctx.fillText(details.ticket, 95, 365);
 
   ctx.fillStyle = '#cbd5e1';
-  ctx.font = '16px sans-serif';
-  ctx.fillText(`Status Laporan: ${details.status}   \u2022   Waktu Kirim: ${details.createdAt}`, 95, 410);
+  ctx.font = '16px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(`Status Laporan: ${details.status}   •   Waktu Kirim: ${details.createdAt}`, 95, 410);
 
   // Draw QR Code onto Canvas (dari QR canvas di DOM dalam container ref)
   const qrCanvas = qrContainer?.querySelector('canvas');
@@ -106,7 +106,7 @@ export async function generateTicketPng(details: TicketDetails, qrContainer?: HT
 
   // 4. Data Details Table Card
   ctx.fillStyle = '#64748b';
-  ctx.font = '900 16px sans-serif';
+  ctx.font = '900 16px "Plus Jakarta Sans", sans-serif';
   ctx.fillText('RINCIAN DATA PENGAJUAN MASYARAKAT', 60, 485);
   ctx.fillRect(60, 495, 1080, 2);
 
@@ -122,11 +122,11 @@ export async function generateTicketPng(details: TicketDetails, qrContainer?: HT
   let currentY = 535;
   fields.forEach((f) => {
     ctx.fillStyle = '#64748b';
-    ctx.font = 'bold 16px sans-serif';
+    ctx.font = 'bold 16px "Plus Jakarta Sans", sans-serif';
     ctx.fillText(f.label, 60, currentY);
 
     ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 17px sans-serif';
+    ctx.font = 'bold 17px "Plus Jakarta Sans", sans-serif';
     ctx.fillText(f.val, 340, currentY);
 
     ctx.fillStyle = '#e2e8f0';
@@ -146,11 +146,11 @@ export async function generateTicketPng(details: TicketDetails, qrContainer?: HT
   ctx.stroke();
 
   ctx.fillStyle = '#64748b';
-  ctx.font = 'bold 15px sans-serif';
+  ctx.font = 'bold 15px "Plus Jakarta Sans", sans-serif';
   ctx.fillText('ISI URAIAN & CATATAN PENGAJUAN:', 85, currentY + 35);
 
   ctx.fillStyle = '#0f172a';
-  ctx.font = '15px sans-serif';
+  ctx.font = '15px "Plus Jakarta Sans", sans-serif';
 
   const lines = details.content.split('\n');
   let lineY = currentY + 70;

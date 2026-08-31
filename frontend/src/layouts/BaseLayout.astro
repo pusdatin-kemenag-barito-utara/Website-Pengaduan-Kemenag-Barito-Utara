@@ -18,21 +18,85 @@ const {
 
 const canonicalUrl = canonical || (Astro.url ? Astro.url.href : PUBLIC_SITE_URL);
 const gaId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID || 'G-56V7KYCD71';
+const googleTagId = import.meta.env.PUBLIC_GTAG_ID || 'GT-T5RE5PM8';
+const gtmId = import.meta.env.PUBLIC_GTM_ID || '';
+const cfBeaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN || '';
+
+// Structured Data JSON-LD (Schema.org GovernmentOrganization & GovernmentService)
+const schemaOrgJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'GovernmentOrganization',
+      '@id': `${PUBLIC_SITE_URL}/#organization`,
+      name: 'Kantor Kementerian Agama Kabupaten Barito Utara',
+      alternateName: 'Kemenag Barito Utara',
+      url: PUBLIC_SITE_URL,
+      logo: `${PUBLIC_SITE_URL}/kemenag.svg`,
+      image: `${PUBLIC_SITE_URL}/pengaduan-v2.webp`,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Jl. Ahmad Yani No. 126',
+        addressLocality: 'Muara Teweh',
+        addressRegion: 'Kalimantan Tengah',
+        postalCode: '73814',
+        addressCountry: 'ID',
+      },
+      contactPoint: {
+        '@type': 'ContactPoint',
+        telephone: '+62-851-1749-1212',
+        contactType: 'customer support',
+        areaServed: 'ID',
+        availableLanguage: ['Indonesian'],
+      },
+    },
+    {
+      '@type': 'GovernmentService',
+      '@id': `${PUBLIC_SITE_URL}/#service`,
+      name: 'SI-GESIT — Sistem Informasi Gagasan, Evaluasi, Saran, Informasi dan Tanggapan',
+      serviceType: 'Layanan Pengaduan & Aspirasi Masyarakat',
+      provider: { '@id': `${PUBLIC_SITE_URL}/#organization` },
+      areaServed: 'Kabupaten Barito Utara, Kalimantan Tengah',
+      url: PUBLIC_SITE_URL,
+      description: description,
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${PUBLIC_SITE_URL}/#website`,
+      url: PUBLIC_SITE_URL,
+      name: 'SI-GESIT Kemenag Barito Utara',
+      description: description,
+      publisher: { '@id': `${PUBLIC_SITE_URL}/#organization` },
+      inLanguage: 'id-ID',
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: `${PUBLIC_SITE_URL}/?ticket={search_term_string}`,
+        'query-input': 'required name=search_term_string',
+      },
+    },
+  ],
+};
 ---
 
 <!doctype html>
 <html lang="id">
   <head>
-    {/* Basic Meta */}
+    {/* ================================================================= */}
+    {/* 1. BASIC META & VIEWPORT                                          */}
+    {/* ================================================================= */}
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
     <title>{title}</title>
     <meta name="title" content={title} />
     <meta name="description" content={description} />
+    <meta name="author" content="Kantor Kementerian Agama Kabupaten Barito Utara" />
+    <meta name="format-detection" content="telephone=no" />
     <link rel="canonical" href={canonicalUrl} />
 
-    {/* Favicon & Multi-Resolution App Icons */}
+    {/* ================================================================= */}
+    {/* 2. PWA, FAVICON & MULTI-RESOLUTION APP ICONS                      */}
+    {/* ================================================================= */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3" />
@@ -44,66 +108,291 @@ const gaId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID || 'G-56V7KYCD71';
     <meta name="theme-color" content="#047857" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SI-GESIT" />
     <meta name="application-name" content="SI-GESIT" />
+    <meta name="msapplication-TileColor" content="#047857" />
+    <meta name="msapplication-TileImage" content="/android-chrome-192x192.png" />
 
-    {/* Open Graph / Facebook / WhatsApp */}
+    {/* ================================================================= */}
+    {/* 3. OPEN GRAPH (FACEBOOK / WHATSAPP / TELEGRAM / LINKEDIN)         */}
+    {/* ================================================================= */}
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={image} />
+    <meta property="og:image:secure_url" content={image} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/webp" />
     <meta property="og:image:alt" content="SI-GESIT Kemenag Barito Utara" />
     <meta property="og:site_name" content="SI-GESIT Kemenag Barito Utara" />
     <meta property="og:locale" content="id_ID" />
 
-    {/* Twitter Cards */}
+    {/* ================================================================= */}
+    {/* 4. TWITTER CARDS                                                 */}
+    {/* ================================================================= */}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content={canonicalUrl} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={image} />
+    <meta name="twitter:image:alt" content="SI-GESIT Kemenag Barito Utara" />
 
-    {/* HTTP/3, DNS-Prefetch & Preconnect Optimization */}
+    {/* ================================================================= */}
+    {/* 5. STRUCTURED DATA SCHEMA.ORG (JSON-LD)                          */}
+    {/* ================================================================= */}
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(schemaOrgJsonLd)} />
+
+    {/* ================================================================= */}
+    {/* 6. HTTP/3, DNS-PREFETCH & PRECONNECT OPTIMIZATION                 */}
+    {/* ================================================================= */}
     <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
     <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
     <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
+    <link rel="dns-prefetch" href="https://static.cloudflareinsights.com" />
+    <link rel="dns-prefetch" href="https://cloudflareinsights.com" />
+    <link rel="dns-prefetch" href="https://c98eb02b668a13c16b14ebff0ef6a37c.r2.cloudflarestorage.com" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.google-analytics.com" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://challenges.cloudflare.com" />
+    <link rel="preconnect" href="https://static.cloudflareinsights.com" crossorigin />
+    <link rel="preconnect" href="https://cloudflareinsights.com" crossorigin />
     <link rel="preconnect" href="https://www.googletagmanager.com" />
 
-    {/* Google Font API: Plus Jakarta Sans (Primary Display Font) */}
+    {/* ================================================================= */}
+    {/* 7. PRIORITY HINTS & CRITICAL ASSET PRELOADING                    */}
+    {/* ================================================================= */}
+    {/* LCP Hero Image Preload (Hanya untuk halaman beranda) */}
+    {Astro.url.pathname === '/' && (
+      <link rel="preload" as="image" href="/pengaduan-v2.webp" fetchpriority="high" type="image/webp" />
+    )}
+    {/* Official Logo SVG Preload */}
+    <link rel="preload" as="image" href="/kemenag.svg" fetchpriority="high" type="image/svg+xml" />
+
+    {/* Google Font API: Plus Jakarta Sans (Primary Display Font with display=swap) */}
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,700&display=swap"
     />
 
-    {/* Priority Hints: Preload Critical Assets */}
-    <link rel="preload" as="image" href="/pengaduan-v2.webp" fetchpriority="high" type="image/webp" />
-    <link rel="preload" as="image" href="/kemenag.svg" type="image/svg+xml" />
+    {/* ================================================================= */}
+    {/* 8. ENTERPRISE GOOGLE ANALYTICS 4 (GA4) & GOOGLE TAG MANAGER (GTM) */}
+    {/* ================================================================= */}
 
-    {/* Google Tag / Google Analytics 4 (GA4) */}
+    {/* A. Google Consent Mode v2 (Standar Kepatuhan Privasi Publik/Pemerintahan) */}
+    <script is:inline>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      
+      // Default: Hanya analitik diizinkan; iklan/personalisasi dinonaktifkan
+      gtag('consent', 'default', {
+        'analytics_storage': 'granted',
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'functionality_storage': 'granted',
+        'security_storage': 'granted',
+        'wait_for_update': 500
+      });
+      
+      gtag('set', 'ads_data_redaction', true);
+      gtag('set', 'url_passthrough', true);
+    </script>
+
+    {/* B. Google Tag Manager Container Script (jika GTM ID dikonfigurasi) */}
+    {gtmId && (
+      <script is:inline define:vars={{ gtmId }}>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+        })(window,document,'script','dataLayer',gtmId);
+      </script>
+    )}
+
+    {/* C. Google Tag (gtag.js) & GA4 Direct API */}
     {gaId && (
       <>
         <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}></script>
-        <script is:inline define:vars={{ gaId }}>
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
+        <script is:inline define:vars={{ gaId, googleTagId }}>
           gtag('js', new Date());
+          
+          // Konfigurasi GA4 Measurement ID
           gtag('config', gaId, {
             send_page_view: true,
+            cookie_domain: 'auto',
+            cookie_flags: 'SameSite=None;Secure',
+            anonymize_ip: true,
+            custom_map: {
+              'dimension1': 'service_name',
+              'dimension2': 'agency',
+              'metric1': 'web_vital_value'
+            }
           });
+
+          // Konfigurasi Google Tag ID jika berbeda
+          if (googleTagId && googleTagId !== gaId) {
+            gtag('config', googleTagId, {
+              send_page_view: false
+            });
+          }
         </script>
       </>
     )}
+
+    {/* D. Cloudflare Browser Insights (Real User Monitoring / RUM) */}
+    {cfBeaconToken ? (
+      <script
+        is:inline
+        defer
+        src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon={`{"token": "${cfBeaconToken}", "spa": true}`}
+      ></script>
+    ) : (
+      <script
+        is:inline
+        defer
+        src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon='{"spa": true}'
+      ></script>
+    )}
+
+    {/* E. Enterprise Automated Telemetry: Core Web Vitals RUM, Scroll Depth, Client Error Tracker */}
+    <script is:inline>
+      (function() {
+        if (typeof window === 'undefined') return;
+
+        // --- Core Web Vitals RUM Observer ---
+        function reportWebVital(name, val, rating) {
+          if (typeof window.gtag === 'function') {
+            window.gtag('event', 'core_web_vitals', {
+              event_category: 'Web_Performance',
+              metric_name: name,
+              metric_value: Math.round(val),
+              metric_rating: rating,
+              non_interaction: true
+            });
+          }
+          if (window.dataLayer) {
+            window.dataLayer.push({
+              event: 'core_web_vitals',
+              metric_name: name,
+              metric_value: Math.round(val),
+              metric_rating: rating
+            });
+          }
+        }
+
+        if ('PerformanceObserver' in window) {
+          try {
+            // LCP (Largest Contentful Paint)
+            const lcpObserver = new PerformanceObserver((entryList) => {
+              const entries = entryList.getEntries();
+              const lastEntry = entries[entries.length - 1];
+              if (lastEntry) {
+                const val = lastEntry.startTime;
+                const rating = val < 2500 ? 'good' : (val < 4000 ? 'needs-improvement' : 'poor');
+                reportWebVital('LCP', val, rating);
+              }
+            });
+            lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true });
+
+            // CLS (Cumulative Layout Shift)
+            let clsValue = 0;
+            const clsObserver = new PerformanceObserver((entryList) => {
+              for (const entry of entryList.getEntries()) {
+                if (!entry.hadRecentInput) {
+                  clsValue += entry.value;
+                }
+              }
+            });
+            clsObserver.observe({ type: 'layout-shift', buffered: true });
+            window.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'hidden') {
+                const rating = clsValue < 0.1 ? 'good' : (clsValue < 0.25 ? 'needs-improvement' : 'poor');
+                reportWebVital('CLS', clsValue * 1000, rating);
+              }
+            }, { once: true });
+
+            // FCP (First Contentful Paint)
+            const fcpObserver = new PerformanceObserver((entryList) => {
+              for (const entry of entryList.getEntries()) {
+                if (entry.name === 'first-contentful-paint') {
+                  const val = entry.startTime;
+                  const rating = val < 1800 ? 'good' : (val < 3000 ? 'needs-improvement' : 'poor');
+                  reportWebVital('FCP', val, rating);
+                }
+              }
+            });
+            fcpObserver.observe({ type: 'paint', buffered: true });
+          } catch (e) {
+            /* ignore observer errors in older browsers */
+          }
+        }
+
+        // --- Scroll Depth Tracker (25%, 50%, 75%, 90%) ---
+        const trackedThresholds = new Set();
+        function handleScroll() {
+          const scrollH = document.documentElement.scrollHeight - window.innerHeight;
+          if (scrollH <= 0) return;
+          const pct = Math.round((window.scrollY / scrollH) * 100);
+          
+          [25, 50, 75, 90].forEach(threshold => {
+            if (pct >= threshold && !trackedThresholds.has(threshold)) {
+              trackedThresholds.add(threshold);
+              if (typeof window.gtag === 'function') {
+                window.gtag('event', 'scroll_depth', {
+                  event_category: 'Engagement',
+                  scroll_percentage: threshold,
+                  non_interaction: true
+                });
+              }
+              if (window.dataLayer) {
+                window.dataLayer.push({
+                  event: 'scroll_depth',
+                  scroll_percentage: threshold
+                });
+              }
+            }
+          });
+        }
+        window.addEventListener('scroll', handleScroll, { passive: true });
+
+        // --- Global Client Error Tracker ---
+        window.addEventListener('error', function(e) {
+          if (typeof window.gtag === 'function') {
+            window.gtag('event', 'client_javascript_error', {
+              event_category: 'Application_Errors',
+              error_message: (e.message || 'unknown error').substring(0, 150),
+              error_source: (e.filename || 'unknown').split('/').pop(),
+              error_lineno: e.lineno || 0,
+              non_interaction: true
+            });
+          }
+        });
+      })();
+    </script>
   </head>
   <body>
+    {/* Fallback Google Tag Manager NoScript Iframe */}
+    {gtmId && (
+      <noscript>
+        <iframe
+          src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
+          height="0"
+          width="0"
+          style="display:none;visibility:hidden"
+        ></iframe>
+      </noscript>
+    )}
+
     <slot />
+
     <script is:inline>
       if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
         window.addEventListener('load', () => {

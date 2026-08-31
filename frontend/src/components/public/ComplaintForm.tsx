@@ -38,6 +38,7 @@ export default function ComplaintForm({
 
   const [subject, setSubject] = useState<string>('');
   const [eventDate, setEventDate] = useState<string>('');
+  const [formStartTime, setFormStartTime] = useState<number | null>(null);
   const [eventLocation, setEventLocation] = useState<string>('');
   const [officerName, setOfficerName] = useState<string>('');
   const [infoPurpose, setInfoPurpose] = useState<string>('');
@@ -195,6 +196,7 @@ export default function ComplaintForm({
     }
 
     setAttachment(file);
+    analytics.complaintAttachmentUploaded(file.type, file.size / 1024);
     if (file.type.startsWith('image/')) {
       const previewUrl = URL.createObjectURL(file);
       setAttachmentPreview(previewUrl);
@@ -215,10 +217,12 @@ export default function ComplaintForm({
     e.preventDefault();
     if (!serviceUnit) {
       setSubmitResult({ success: false, message: 'Harap pilih unit layanan terlebih dahulu!' });
+      analytics.complaintSubmitFailed('missing_unit', 'Unit layanan belum dipilih');
       return;
     }
     if (!isPhoneValid) {
       setSubmitResult({ success: false, message: 'Harap isi nomor WhatsApp/HP yang valid (diawali 08, 10-13 digit)!' });
+      analytics.complaintSubmitFailed('invalid_phone', 'Nomor HP/WA tidak valid');
       return;
     }
     if (attachment && attachment.size > 5 * 1024 * 1024) {
@@ -226,11 +230,13 @@ export default function ComplaintForm({
         success: false,
         message: `Ukuran berkas lampiran (${(attachment.size / (1024 * 1024)).toFixed(2)} MB) melebihi batas 5MB! Harap pilih file yang lebih kecil.`,
       });
+      analytics.complaintSubmitFailed('file_too_large', 'Ukuran file melebihi batas 5MB');
       return;
     }
 
     setIsSubmitting(true);
     setSubmitResult(null);
+    analytics.complaintSubmitAttempt(category, serviceUnit);
 
     let finalContent = content.trim();
     if (category === 'Saran') {
@@ -295,8 +301,9 @@ export default function ComplaintForm({
         }),
       };
 
+      const durationSec = formStartTime ? Math.round((Date.now() - formStartTime) / 1000) : 0;
       onSuccessSubmit(details);
-      analytics.submitPengaduan(category, serviceUnit, isAnonymous);
+      analytics.submitPengaduan(category, serviceUnit, isAnonymous, durationSec);
 
       // Bersihkan draft tersimpan
       try {
@@ -319,11 +326,14 @@ export default function ComplaintForm({
       setIsAnonymous(false);
       setTurnstileToken('');
       setIsDraftRestored(false);
+      setFormStartTime(null);
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Terjadi kesalahan saat mengirim pengaduan. Silakan coba lagi.';
       setSubmitResult({
         success: false,
-        message: err instanceof Error ? err.message : 'Terjadi kesalahan saat mengirim pengaduan. Silakan coba lagi.',
+        message: errMsg,
       });
+      analytics.complaintSubmitFailed('server_error', errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -396,7 +406,7 @@ export default function ComplaintForm({
               {submitResult.ticket && (
                 <p className="text-xs sm:text-base">
                   Nomor tiket Anda:{' '}
-                  <span className="font-mono font-bold text-emerald-900 bg-white px-2.5 sm:px-4 py-1 rounded-lg border border-emerald-300 shadow-sm inline-block mt-1">
+                  <span className="font-bold text-emerald-900 bg-white px-2.5 sm:px-4 py-1 rounded-lg border border-emerald-300 shadow-sm inline-block mt-1">
                     {submitResult.ticket}
                   </span>
                 </p>
@@ -436,8 +446,9 @@ export default function ComplaintForm({
                   aria-checked={isSelected}
                   aria-label={`${cat.label}: ${cat.desc}`}
                   onClick={() => {
+                    if (!formStartTime) setFormStartTime(Date.now());
                     setCategory(cat.id);
-                    analytics.selectCategory(cat.id);
+                    analytics.complaintCategorySelected(cat.id, cat.label);
                   }}
                   className={`p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer active:scale-95 ${
                     isSelected
@@ -509,8 +520,10 @@ export default function ComplaintForm({
                       role="option"
                       aria-selected={serviceUnit === unit.name}
                       onClick={() => {
+                        if (!formStartTime) setFormStartTime(Date.now());
                         setServiceUnit(unit.name);
                         setIsDropdownOpen(false);
+                        analytics.complaintUnitSelected(unit.name);
                       }}
                       className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors flex items-center justify-between cursor-pointer ${
                         serviceUnit === unit.name ? 'bg-emerald-50 text-emerald-950 font-black' : 'text-slate-700 hover:bg-slate-50'
@@ -545,7 +558,10 @@ export default function ComplaintForm({
               id="anonymousToggle"
               aria-label="Kirim pengaduan sebagai anonim"
               checked={isAnonymous}
-              onChange={(e) => setIsAnonymous(e.target.checked)}
+              onChange={(e) => {
+                setIsAnonymous(e.target.checked);
+                analytics.complaintAnonymousToggled(e.target.checked);
+              }}
               className="sr-only peer"
             />
             <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600" />

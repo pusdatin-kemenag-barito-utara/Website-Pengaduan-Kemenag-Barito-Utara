@@ -14,7 +14,7 @@ export default function PrintableTicket({ details, ticketRef, qrValue }: Printab
   return (
     <div
       ref={ticketRef}
-      style={{ backgroundColor: '#ffffff', color: '#0f172a', padding: '32px', fontFamily: 'sans-serif' }}
+      style={{ backgroundColor: '#ffffff', color: '#0f172a', padding: '32px', fontFamily: '"Plus Jakarta Sans", sans-serif' }}
       className="hidden print:block fixed inset-0 z-[9999] leading-relaxed"
     >
       <div style={{ borderBottom: '4px solid #0f172a', paddingBottom: '8px', marginBottom: '24px' }}>
@@ -52,7 +52,7 @@ export default function PrintableTicket({ details, ticketRef, qrValue }: Printab
           <span style={{ color: '#94a3b8' }} className="text-xs font-bold uppercase tracking-wider block">
             NOMOR TIKET RESMI SI-GESIT
           </span>
-          <span style={{ color: '#34d399' }} className="font-mono text-3xl font-black tracking-widest block">
+          <span style={{ color: '#34d399' }} className="text-3xl font-black tracking-wide block">
             {details.ticket}
           </span>
           <p style={{ color: '#cbd5e1' }} className="text-xs font-medium pt-1">
@@ -103,7 +103,7 @@ export default function PrintableTicket({ details, ticketRef, qrValue }: Printab
               <td style={{ color: '#64748b', padding: '12px 0' }} className="font-bold">
                 Nomor WhatsApp / HP:
               </td>
-              <td style={{ color: '#0f172a', padding: '12px 0' }} className="font-mono font-extrabold text-sm">
+              <td style={{ color: '#0f172a', padding: '12px 0' }} className="font-extrabold text-sm">
                 {details.phone}
               </td>
             </tr>
@@ -149,7 +149,7 @@ export default function PrintableTicket({ details, ticketRef, qrValue }: Printab
             Harap simpan bukti fisik / PDF nomor tiket ini untuk melakukan cek status penanganan secara online.
           </p>
         </div>
-        <div style={{ color: '#94a3b8' }} className="text-right font-mono font-extrabold text-[10px]">
+        <div style={{ color: '#94a3b8' }} className="text-right font-extrabold text-[10px]">
           DOKUMEN RESMI OTENTIK DIGITAL
         </div>
       </div>

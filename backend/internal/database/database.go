@@ -43,6 +43,14 @@ func Connect(ctx context.Context, dsn, schema string) (*DB, error) {
 	// koneksi pool dipakai ulang lintas eksekusi (migrasi & aplikasi),
 	// dan mendukung multi-statement migrasi secara alami.
 	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+
+	// Pool Tuning: Pre-warm koneksi agar request pertama & concurrent instan
+	cfg.MinConns = 4
+	cfg.MaxConns = 25
+	cfg.MaxConnIdleTime = 30 * time.Minute
+	cfg.MaxConnLifetime = 1 * time.Hour
+	cfg.HealthCheckPeriod = 1 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

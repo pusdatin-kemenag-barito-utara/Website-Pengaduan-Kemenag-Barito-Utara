@@ -84,7 +84,7 @@ export default function ComplaintDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200 font-['Plus_Jakarta_Sans',sans-serif]">
       <div className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl shadow-slate-950/30 border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 sm:px-8 py-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 shrink-0 border-b border-slate-800">
@@ -95,7 +95,7 @@ export default function ComplaintDetailModal({
             <div>
               <h3 className="text-base sm:text-lg font-black text-white tracking-tight">Detail &amp; Respon Petugas</h3>
               <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-xs text-slate-400 font-mono">Tiket: #{selectedItem.ticket_number}</p>
+                <p className="text-xs text-slate-400">Tiket: #{selectedItem.ticket_number}</p>
                 <button
                   type="button"
                   onClick={handleCopyTicket}
@@ -166,7 +166,7 @@ export default function ComplaintDetailModal({
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">No Handphone</p>
-                  <p className="text-xs sm:text-sm font-black text-slate-900 font-mono truncate">
+                  <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
                     {selectedItem.phone_number}
                   </p>
                 </div>
@@ -201,7 +201,11 @@ export default function ComplaintDetailModal({
                   <span className="text-xs font-bold text-slate-800 truncate">Lampiran Dokumen</span>
                 </div>
                 <a
-                  href={selectedItem.file_url}
+                  href={
+                    selectedItem.file_url.startsWith('http://') || selectedItem.file_url.startsWith('https://')
+                      ? selectedItem.file_url
+                      : `/api/v1/admin/pengaduan/${selectedItem.ticket_number}/file`
+                  }
                   target="_blank"
                   rel="noreferrer"
                   className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shrink-0"
@@ -324,7 +328,7 @@ export default function ComplaintDetailModal({
                 <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
                   Tanggapan Resmi Tim Pengaduan
                 </label>
-                <span className="text-[10px] text-slate-400 font-mono font-medium">
+                <span className="text-[10px] text-slate-400 font-medium">
                   {adminResponseText.length} karakter
                 </span>
               </div>

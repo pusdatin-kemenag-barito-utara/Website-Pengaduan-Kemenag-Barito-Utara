@@ -2,29 +2,29 @@
 # SI-GESIT Kemenag Barito Utara — .gitignore
 # ==========================================
 
-# Dependencies
+# Dependencies (Root, Frontend, & Backend)
 node_modules/
+**/node_modules/
 .pnpm-store/
 .npm/
 
-# Astro & Frontend Build
+# Astro & Frontend Build Output
 dist/
-frontend/dist/
+**/dist/
 .astro/
-frontend/.astro/
+**/.astro/
 *.tsbuildinfo
-
-# Lighthouse & Test Reports
-report-*.json
-report-*.html
-coverage.out
-coverage.html
+.output/
 
 # Go Backend Build & Binaries
 backend/bin/
 backend/tmp/
 bin/
 tmp/
+api
+backend/api
+backend/cmd/api/api
+backend/cmd/api/api.exe
 *.exe
 *.exe~
 *.dll
@@ -33,18 +33,25 @@ tmp/
 *.test
 *.out
 
-# Environment Variables & Secrets
+# Environment Variables & Secrets (Semua Direktori & Subdirektori)
 .env
-.env.local
-.env.*.local
-.env.production
-.env.development
+.env.*
+**/.env
+**/.env.*
 !.env.example
+!**/.env.example
 *.pem
 *.key
 *.cert
 
-# Logs & Debug
+# Lighthouse, Coverage & Test Reports
+report-*.json
+report-*.html
+coverage.out
+coverage.html
+.nyc_output/
+
+# Logs & Runtime Debug
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -53,11 +60,23 @@ pnpm-debug.log*
 
 # OS Specific
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
 
-# IDE & Editor
+# IDE, Editor & Tooling
 .idea/
 .vscode/*
 !.vscode/settings.json
+!.vscode/extensions.json
 *.sublime-workspace
 *.sublime-project
+*.swp
+*.swo
+*~
+.gemini/
+.agents/

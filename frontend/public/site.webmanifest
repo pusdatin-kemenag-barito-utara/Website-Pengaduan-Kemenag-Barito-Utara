@@ -1,15 +1,24 @@
 {
   "name": "SI-GESIT — Pengaduan Kemenag Barito Utara",
   "short_name": "SI-GESIT",
-  "description": "Sistem Informasi Gagasan, Evaluasi, Saran, Informasi dan Tanggapan - Kementerian Agama Kabupaten Barito Utara",
+  "description": "Sistem Informasi Gagasan, Evaluasi, Saran, Informasi dan Tanggapan resmi Kantor Kementerian Agama Kabupaten Barito Utara",
   "start_url": "/",
-  "id": "/",
+  "id": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#f0fdf4",
   "theme_color": "#047857",
   "orientation": "portrait-primary",
+  "lang": "id-ID",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
     {
       "src": "/favicon-32x32.png",
       "sizes": "32x32",
@@ -19,13 +28,25 @@
       "src": "/android-chrome-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/kemenag.svg",
@@ -34,5 +55,28 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["government", "productivity", "utilities"]
+  "shortcuts": [
+    {
+      "name": "Kirim Pengaduan Baru",
+      "short_name": "Buat Laporan",
+      "description": "Sampaikan pengaduan, saran, atau aspirasi ke Kemenag Barito Utara",
+      "url": "/#form",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Lacak Status Tiket",
+      "short_name": "Cek Tiket",
+      "description": "Pantau tindak lanjut nomor tiket pengaduan Anda secara real-time",
+      "url": "/?action=track",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Konsultasi WhatsApp PTSP",
+      "short_name": "Chat PTSP",
+      "description": "Hubungi petugas Helpdesk PTSP Kemenag Barito Utara via WhatsApp",
+      "url": "/?action=helpdesk",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["government", "productivity", "utilities", "social"]
 }

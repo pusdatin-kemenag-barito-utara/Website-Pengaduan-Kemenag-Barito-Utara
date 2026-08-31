@@ -1,11 +1,10 @@
 package server
 
 import (
+	"errors"
 	"log/slog"
-	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/gofiber/fiber/v3"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/config"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/database"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/modules/admin"
@@ -30,39 +29,53 @@ type Deps struct {
 	DB  *database.DB // boleh nil bila DATABASE_URL belum dikonfigurasi
 }
 
-// New membangun router HTTP lengkap.
-func New(deps Deps) http.Handler {
-	r := chi.NewRouter()
-
-	r.Use(middleware.RequestID)
-	r.Use(middleware.SecurityHeaders)
-	r.Use(middleware.Recoverer(deps.Log))
-	r.Use(middleware.AccessLog(deps.Log))
-
-	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
-		httpx.JSON(w, http.StatusNotFound, map[string]any{
-			"success": false, "error": "not_found", "message": "Endpoint tidak ditemukan.",
-		})
+// New membangun aplikasi Fiber v3 lengkap.
+func New(deps Deps) *fiber.App {
+	app := fiber.New(fiber.Config{
+		BodyLimit:      6 * 1024 * 1024, // 6 MB untuk lampiran
+		ReadBufferSize: 32 * 1024,       // 32 KB untuk header request & cookies besar (anti HTTP 431)
+		ErrorHandler: func(c fiber.Ctx, err error) error {
+			var appErr *httpx.AppError
+			if errors.As(err, &appErr) {
+				return c.Status(appErr.Status).JSON(fiber.Map{
+					"success": false,
+					"error":   appErr.Code,
+					"message": appErr.Message,
+				})
+			}
+			var fiberErr *fiber.Error
+			if errors.As(err, &fiberErr) {
+				return c.Status(fiberErr.Code).JSON(fiber.Map{
+					"success": false,
+					"error":   "http_error",
+					"message": fiberErr.Message,
+				})
+			}
+			deps.Log.Error("unhandled error", "error", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "internal_error",
+				"message": "Terjadi kesalahan pada server.",
+			})
+		},
 	})
-	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
-		httpx.JSON(w, http.StatusMethodNotAllowed, map[string]any{
-			"success": false, "error": "method_not_allowed", "message": "Metode tidak diizinkan.",
-		})
-	})
 
+	// Middleware global
+	app.Use(middleware.RequestID())
+	app.Use(middleware.SecurityHeaders())
+	app.Use(middleware.Recoverer(deps.Log))
+	app.Use(middleware.AccessLog(deps.Log))
+
+	// Health check endpoints
 	healthHandler := health.New(deps.Cfg, deps.DB, deps.Log, Version)
-	r.Get("/health", healthHandler.Health)
-	r.Get("/api/health", healthHandler.Health)
+	app.Get("/health", healthHandler.Health)
+	app.Get("/api/health", healthHandler.Health)
 
-	r.Route("/api/v1", func(api chi.Router) {
-		api.Use(chimw.RealIP)
+	// API v1 routes
+	api := app.Group("/api/v1")
+	healthHandler.Register(api)
 
-		healthHandler.Register(api)
-
-		if deps.DB == nil {
-			return
-		}
-
+	if deps.DB != nil {
 		storageClient := storage.NewR2(
 			deps.Cfg.R2AccessKeyID, deps.Cfg.R2SecretAccessKey,
 			deps.Cfg.R2EndpointURL, deps.Cfg.R2BucketPengaduan,
@@ -84,17 +97,24 @@ func New(deps Deps) http.Handler {
 		authHandler := auth.NewHandler(authSvc, deps.Cfg, deps.Log)
 		authHandler.Register(api)
 
-		// Rute admin wajib lewat RequireAdmin (perbaikan audit K1/K2).
-		api.Route("/admin", func(adminApi chi.Router) {
-			adminApi.Use(authHandler.RequireAdmin)
-			authHandler.RegisterAdmin(adminApi)
-			layananHandler.RegisterAdmin(adminApi)
-			admin.NewHandler(
-				admin.NewRepository(deps.DB.Pool, deps.Cfg.AppSchema, deps.Log),
-				storageClient, deps.Log,
-			).Register(adminApi)
+		// Rute admin wajib lewat RequireAdmin
+		adminApi := api.Group("/admin", authHandler.RequireAdmin)
+		authHandler.RegisterAdmin(adminApi)
+		layananHandler.RegisterAdmin(adminApi)
+		admin.NewHandler(
+			admin.NewRepository(deps.DB.Pool, deps.Cfg.AppSchema, deps.Log),
+			storageClient, deps.Log,
+		).Register(adminApi)
+	}
+
+	// 404 handler untuk route yang tidak terdaftar
+	app.Use(func(c fiber.Ctx) error {
+		return httpx.JSON(c, fiber.StatusNotFound, fiber.Map{
+			"success": false,
+			"error":   "not_found",
+			"message": "Endpoint tidak ditemukan.",
 		})
 	})
 
-	return r
+	return app
 }

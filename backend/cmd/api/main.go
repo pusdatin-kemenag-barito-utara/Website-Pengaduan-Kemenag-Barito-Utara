@@ -1,15 +1,13 @@
 package main
 
-
 import (
 	"context"
-	"errors"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/gofiber/fiber/v3"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/config"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/database"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/logger"
@@ -56,20 +54,16 @@ func main() {
 		log.Warn("DATABASE_URL kosong — berjalan tanpa database (health = degraded)")
 	}
 
-	handler := server.New(server.Deps{Cfg: cfg, Log: log, DB: db})
+	app := server.New(server.Deps{Cfg: cfg, Log: log, DB: db})
 
-	srv := &http.Server{
-		Addr:              cfg.Host + ":" + cfg.Port,
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
+	addr := cfg.Host + ":" + cfg.Port
 
 	go func() {
-		log.Info("server berjalan", "addr", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Info("server fiber v3 berjalan", "addr", addr)
+		if err := app.Listen(addr, fiber.ListenConfig{
+			DisableStartupMessage: true,
+		}); err != nil {
 			log.Error("server error", "error", err)
-			os.Exit(1)
 		}
 	}()
 
@@ -78,7 +72,7 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
 		log.Error("gagal shutdown", "error", err)
 	}
 	log.Info("server berhenti")

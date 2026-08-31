@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -54,6 +55,12 @@ type Service struct {
 // NewService membuat Service auth. Tabel pusdatin diakses lintas schema
 // dengan nama yang memenuhi syarat (pooler mengabaikan search_path).
 func NewService(pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger, appSchema string) *Service {
+	tr := &http.Transport{
+		MaxIdleConns:        20,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 3 * time.Second,
+	}
 	return &Service{
 		pool:      pool,
 		cfg:       cfg,
@@ -62,7 +69,7 @@ func NewService(pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger, appSch
 		attempts:  fmt.Sprintf("%q.%q", cfg.PusdatinSchema, "login_attempts"),
 		sessions:  fmt.Sprintf("%q.%q", appSchema, "sessions"),
 		ipLimiter: ratelimit.New(10, time.Minute),
-		http:      &http.Client{Timeout: 10 * time.Second},
+		http:      &http.Client{Transport: tr, Timeout: 5 * time.Second},
 	}
 }
 
@@ -81,7 +88,7 @@ type Session struct {
 func (s *Service) Login(ctx context.Context, email, password, ip string) (*Session, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if !strings.Contains(email, "@") || email == "" || password == "" {
-		s.recordFailure(ctx, ip)
+		go s.recordFailure(context.Background(), ip)
 		return nil, httpx.Unauthorized("invalid_credentials", "Email atau password salah.")
 	}
 
@@ -90,41 +97,66 @@ func (s *Service) Login(ctx context.Context, email, password, ip string) (*Sessi
 		return nil, httpx.Internal("auth_unconfigured", "Autentikasi belum dikonfigurasi.")
 	}
 
-	// Cek lockout dari tabel login_attempts (shared lintas instance).
-	locked, wait, err := s.checkLockout(ctx, ip)
-	if err != nil {
+	if ok, _ := s.ipLimiter.Allow("login:" + ip); !ok {
+		return nil, httpx.TooManyRequests("rate_limited", "Terlalu banyak percobaan login. Coba lagi nanti.")
+	}
+
+	// Eksekusi paralel: checkLockout, verifyGoTrue, dan loadAdminProfile sekaligus
+	var (
+		locked     bool
+		wait       time.Duration
+		errLockout error
+		goTrueOK   bool
+		profile    *Profile
+		errProfile error
+		wg         sync.WaitGroup
+	)
+
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		locked, wait, errLockout = s.checkLockout(ctx, ip)
+	}()
+	go func() {
+		defer wg.Done()
+		goTrueOK = s.verifyGoTrue(ctx, email, password)
+	}()
+	go func() {
+		defer wg.Done()
+		profile, errProfile = s.loadAdminProfile(ctx, email)
+	}()
+	wg.Wait()
+
+	if errLockout != nil {
 		return nil, httpx.Internal("db_error", "Gagal memeriksa status login.")
 	}
 	if locked {
 		return nil, httpx.TooManyRequests("locked",
 			fmt.Sprintf("Terlalu banyak percobaan. Coba lagi dalam %d menit.", int(wait.Minutes())+1))
 	}
-	if ok, _ := s.ipLimiter.Allow("login:" + ip); !ok {
-		return nil, httpx.TooManyRequests("rate_limited", "Terlalu banyak percobaan login. Coba lagi nanti.")
-	}
 
 	// 1) Verifikasi kredensial via Supabase Auth (GoTrue).
-	if !s.verifyGoTrue(ctx, email, password) {
+	if !goTrueOK {
 		s.log.Warn("login: verifyGoTrue returned false", "email", email)
-		s.recordFailure(ctx, ip)
+		go s.recordFailure(context.Background(), ip)
 		return nil, httpx.Unauthorized("invalid_credentials", "Email atau password salah.")
 	}
 
 	// 2) Otorisasi: akun harus profil admin aktif di schema pusdatin.
-	profile, err := s.loadAdminProfile(ctx, email)
-	if err != nil {
-		s.log.Warn("login: loadAdminProfile failed", "email", email, "error", err)
-		s.recordFailure(ctx, ip)
-		if errors.Is(err, ErrNotAdmin) {
+	if errProfile != nil {
+		s.log.Warn("login: loadAdminProfile failed", "email", email, "error", errProfile)
+		go s.recordFailure(context.Background(), ip)
+		if errors.Is(errProfile, ErrNotAdmin) {
 			s.log.Warn("login akun non-admin ditolak", "email", email, "ip", ip)
 			return nil, httpx.Forbidden("not_admin", "Akun tidak memiliki akses panel pengaduan.")
 		}
 		return nil, httpx.Internal("db_error", "Gagal memuat data admin.")
 	}
 
-	s.resetAttempts(ctx, ip)
+	// 3) Reset attempts di background agar response instan
+	go s.resetAttempts(context.Background(), ip)
 
-	// 3) Buat token sesi acak; simpan hash-nya saja.
+	// 4) Buat token sesi acak; simpan hash-nya saja.
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return nil, httpx.Internal("internal_error", "Gagal membuat sesi.")
@@ -132,16 +164,16 @@ func (s *Service) Login(ctx context.Context, email, password, ip string) (*Sessi
 	token := hex.EncodeToString(raw)
 	expires := time.Now().Add(time.Duration(s.cfg.SessionTTLHours) * time.Hour)
 
-	_, err = s.pool.Exec(ctx, fmt.Sprintf(`
+	if _, err := s.pool.Exec(ctx, fmt.Sprintf(`
 		INSERT INTO %s (token_hash, admin_email, role, expires_at)
 		VALUES ($1, $2, $3, $4)`, s.sessions),
-		hashToken(token), profile.Email, profile.Role, expires)
-	if err != nil {
+		hashToken(token), profile.Email, profile.Role, expires); err != nil {
 		s.log.Error("insert session gagal", "error", err)
 		return nil, httpx.Internal("db_error", "Gagal membuat sesi.")
 	}
 
-	s.purgeExpiredSessions(ctx)
+	// Cleanup di background
+	go s.purgeExpiredSessions(context.Background())
 
 	return &Session{
 		Token:      token,

@@ -221,7 +221,7 @@ export default function LayananManagement({
                         >
                           <GripVertical className="w-4 h-4" />
                         </div>
-                        <span className="font-mono font-extrabold text-slate-400">{index + 1}</span>
+                        <span className="font-extrabold text-slate-400">{index + 1}</span>
                       </div>
                     </td>
                     <td className="p-4 sm:p-5 font-black text-slate-900">{layanan.name}</td>

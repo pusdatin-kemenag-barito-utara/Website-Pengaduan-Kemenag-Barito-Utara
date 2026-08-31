@@ -13,14 +13,14 @@ import (
 
 // ANSI color codes
 const (
-	ansiReset   = "\033[0m"
-	ansiBold    = "\033[1m"
-	ansiRed     = "\033[31m"
-	ansiGreen   = "\033[32m"
-	ansiYellow  = "\033[33m"
-	ansiCyan    = "\033[36m"
-	ansiWhite   = "\033[37m"
-	ansiGray    = "\033[90m"
+	ansiReset  = "\033[0m"
+	ansiBold   = "\033[1m"
+	ansiRed    = "\033[31m"
+	ansiGreen  = "\033[32m"
+	ansiYellow = "\033[33m"
+	ansiCyan   = "\033[36m"
+	ansiWhite  = "\033[37m"
+	ansiGray   = "\033[90m"
 )
 
 // PrettyHandler memformat log secara rapi dan berwarna untuk terminal development.
@@ -80,35 +80,46 @@ func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
 			status = v
 		case int64:
 			status = int(v)
+		case float64:
+			status = int(v)
 		}
 
-		var durationMs int64
-		switch v := attrMap["duration_ms"].(type) {
-		case int64:
-			durationMs = v
-		case int:
-			durationMs = int64(v)
+		var durationStr string
+		switch v := attrMap["duration"].(type) {
+		case string:
+			durationStr = v
+		default:
+			switch d := attrMap["duration_ms"].(type) {
+			case int64:
+				durationStr = fmt.Sprintf("%dms", d)
+			case int:
+				durationStr = fmt.Sprintf("%dms", d)
+			case float64:
+				durationStr = fmt.Sprintf("%.1fms", d)
+			default:
+				durationStr = "0ms"
+			}
 		}
 
 		reqID, _ := attrMap["request_id"].(string)
 		ip, _ := attrMap["ip"].(string)
 
-		// Badge [HTTP]
-		sb.WriteString(fmt.Sprintf("%s%s[HTTP]%s ", ansiBold, ansiCyan, ansiReset))
+		// Badge [BE:API]
+		sb.WriteString(fmt.Sprintf("%s%s[BE:API]%s ", ansiBold, ansiYellow, ansiReset))
 
 		// Method HTTP berwarna
 		sb.WriteString(colorizeMethod(method))
 		sb.WriteString(" ")
 
 		// URL Path
-		sb.WriteString(fmt.Sprintf("%s%-22s%s ", ansiBold, path, ansiReset))
+		sb.WriteString(fmt.Sprintf("%s%-24s%s ", ansiBold, path, ansiReset))
 
 		// Status Code & Text
 		sb.WriteString(colorizeStatus(status))
 		sb.WriteString(" ")
 
-		// Durasi eksekusi
-		sb.WriteString(colorizeDuration(durationMs))
+		// Durasi eksekusi (kecepatan)
+		sb.WriteString(colorizeDuration(durationStr))
 
 		// Info tambahan (IP & Request ID)
 		var extras []string
@@ -170,13 +181,13 @@ func (h *PrettyHandler) WithGroup(name string) slog.Handler {
 func formatLevel(level slog.Level) string {
 	switch {
 	case level >= slog.LevelError:
-		return fmt.Sprintf("%s%s[ERROR]%s", ansiBold, ansiRed, ansiReset)
+		return fmt.Sprintf("%s%s[BE:ERROR]%s", ansiBold, ansiRed, ansiReset)
 	case level >= slog.LevelWarn:
-		return fmt.Sprintf("%s%s[WARN]%s ", ansiBold, ansiYellow, ansiReset)
+		return fmt.Sprintf("%s%s[BE:WARN]%s ", ansiBold, ansiYellow, ansiReset)
 	case level >= slog.LevelInfo:
-		return fmt.Sprintf("%s%s[INFO]%s ", ansiBold, ansiGreen, ansiReset)
+		return fmt.Sprintf("%s%s[BE:INFO]%s ", ansiBold, ansiGreen, ansiReset)
 	default:
-		return fmt.Sprintf("%s%s[DEBUG]%s", ansiBold, ansiGray, ansiReset)
+		return fmt.Sprintf("%s%s[BE:DEBUG]%s", ansiBold, ansiGray, ansiReset)
 	}
 }
 
@@ -221,17 +232,30 @@ func colorizeStatus(status int) string {
 	return fmt.Sprintf("%s%s%-15s%s", ansiBold, color, statusText, ansiReset)
 }
 
-func colorizeDuration(d int64) string {
-	var color string
-	switch {
-	case d < 100:
-		color = ansiGreen
-	case d < 500:
-		color = ansiYellow
-	default:
-		color = ansiRed
+func colorizeDuration(d string) string {
+	var color = ansiGreen
+	if strings.Contains(d, "s") && !strings.Contains(d, "ms") && !strings.Contains(d, "µs") && !strings.Contains(d, "ns") {
+		var sec float64
+		_, _ = fmt.Sscanf(d, "%fs", &sec)
+		if sec >= 3.0 {
+			color = ansiRed
+		} else if sec >= 1.0 {
+			color = ansiYellow
+		} else {
+			color = ansiGreen
+		}
+	} else if strings.Contains(d, "ms") {
+		var ms float64
+		_, _ = fmt.Sscanf(d, "%fms", &ms)
+		if ms >= 2000 {
+			color = ansiRed
+		} else if ms >= 800 {
+			color = ansiYellow
+		} else {
+			color = ansiGreen
+		}
 	}
-	return fmt.Sprintf("%s(%dms)%s", color, d, ansiReset)
+	return fmt.Sprintf("%s(%s)%s", color, d, ansiReset)
 }
 
 // New membuat logger sesuai format (pretty untuk dev, JSON untuk prod).

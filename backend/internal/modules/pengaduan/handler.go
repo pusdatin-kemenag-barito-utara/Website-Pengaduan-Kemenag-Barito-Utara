@@ -3,15 +3,16 @@ package pengaduan
 import (
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v3"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/middleware"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/ratelimit"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/validate"
-	"time"
 )
 
 // Handler menangani endpoint publik pengaduan.
@@ -25,94 +26,131 @@ func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc, trackLmtr: ratelimit.New(10, time.Minute)}
 }
 
-// Register memasang rute modul pengaduan.
-func (h *Handler) Register(r chi.Router) {
+// Register memasang rute modul pengaduan ke router Fiber.
+func (h *Handler) Register(r fiber.Router) {
 	r.Post("/pengaduan", h.Submit)
-	r.Get("/pengaduan/{ticket}", h.Track)
+	r.Get("/pengaduan/:ticket", h.Track)
 }
 
 // Submit menangani POST /api/v1/pengaduan (multipart/form-data).
-func (h *Handler) Submit(w http.ResponseWriter, r *http.Request) {
-	// 6 MB: 5 MB file + ruang untuk field.
-	if err := r.ParseMultipartForm(6 << 20); err != nil {
-		httpx.WriteError(w, httpx.BadRequest("invalid_form", "Form tidak valid atau terlalu besar (maks. 5 MB)."))
-		return
-	}
-	defer r.MultipartForm.RemoveAll()
-
+func (h *Handler) Submit(c fiber.Ctx) error {
 	in := &SubmitInput{
-		Category:    r.FormValue("category"),
-		ServiceUnit: r.FormValue("service_unit"),
-		FullName:    r.FormValue("full_name"),
-		PhoneNumber: strings.TrimPrefix(r.FormValue("phone_number"), "+"),
-		Content:     r.FormValue("content"),
-		IsAnonymous: r.FormValue("is_anonymous") == "true",
-		Turnstile:   r.FormValue("cf-turnstile-response"),
-		ClientIP:    middleware.ClientIP(r),
+		Category:    c.FormValue("category"),
+		ServiceUnit: c.FormValue("service_unit"),
+		FullName:    c.FormValue("full_name"),
+		PhoneNumber: strings.TrimPrefix(c.FormValue("phone_number"), "+"),
+		Content:     c.FormValue("content"),
+		IsAnonymous: c.FormValue("is_anonymous") == "true",
+		Turnstile:   c.FormValue("cf-turnstile-response"),
+		ClientIP:    middleware.ClientIP(c),
 	}
 
 	// Lampiran opsional (png/jpeg/pdf).
-	file, header, err := r.FormFile("attachment")
-	if err == nil {
+	fileHeader, err := c.FormFile("attachment")
+	if err == nil && fileHeader != nil {
+		file, ferr := fileHeader.Open()
+		if ferr != nil {
+			return httpx.WriteError(c, httpx.BadRequest("invalid_file", "Gagal membaca lampiran."))
+		}
 		defer file.Close()
-		ct := header.Header.Get("Content-Type")
+
+		ct := fileHeader.Header.Get("Content-Type")
 		if !allowedContentType(ct) {
-			httpx.WriteError(w, httpx.BadRequest("invalid_file_type", "Lampiran harus berupa PNG, JPG, atau PDF."))
-			return
+			return httpx.WriteError(c, httpx.BadRequest("invalid_file_type", "Lampiran harus berupa PNG, JPG, atau PDF."))
 		}
 		data, rerr := io.ReadAll(io.LimitReader(file, maxAttachmentBytes+1))
 		if rerr != nil {
-			httpx.WriteError(w, httpx.BadRequest("invalid_file", "Gagal membaca lampiran."))
-			return
+			return httpx.WriteError(c, httpx.BadRequest("invalid_file", "Gagal membaca lampiran."))
 		}
+		if len(data) > maxAttachmentBytes {
+			return httpx.WriteError(c, httpx.BadRequest("file_too_large", "Ukuran berkas lampiran maksimal 5 MB."))
+		}
+
+		// Validasi Magic Bytes biner asli (Anti MIME spoofing & anti executable cloaking)
+		detectedCT := detectStrictContentType(data)
+		if detectedCT == "" {
+			return httpx.WriteError(c, httpx.BadRequest("invalid_file_type", "Format berkas tidak valid atau rusak. Hanya berkas PNG, JPG/JPEG, dan PDF asli yang diizinkan."))
+		}
+
 		in.Attachment = data
-		in.ContentType = ct
-	} else if !errors.Is(err, http.ErrMissingFile) {
-		httpx.WriteError(w, httpx.BadRequest("invalid_file", "Gagal membaca lampiran."))
-		return
+		in.ContentType = detectedCT
+	} else if err != nil && !errors.Is(err, http.ErrMissingFile) && !errors.Is(err, multipart.ErrMessageTooLarge) {
+		// Abaikan jika memang file tidak dikirim (opsional)
 	}
 
-	ticket, serr := h.svc.Submit(r.Context(), in)
+	ticket, serr := h.svc.Submit(c.Context(), in)
 	if serr != nil {
-		httpx.WriteError(w, serr)
-		return
+		return httpx.WriteError(c, serr)
 	}
 
-	httpx.JSON(w, http.StatusCreated, map[string]any{
+	return httpx.JSON(c, fiber.StatusCreated, fiber.Map{
 		"success": true,
-		"data": map[string]string{
+		"data": fiber.Map{
 			"ticket_number": ticket,
 			"message":       "Pengaduan berhasil dikirim. Simpan nomor tiket Anda untuk melacak status.",
 		},
 	})
 }
 
-// Track menangani GET /api/v1/pengaduan/{ticket}.
-func (h *Handler) Track(w http.ResponseWriter, r *http.Request) {
-	ticket := strings.ToUpper(strings.TrimSpace(chi.URLParam(r, "ticket")))
+// Track menangani GET /api/v1/pengaduan/:ticket.
+func (h *Handler) Track(c fiber.Ctx) error {
+	ticket := strings.ToUpper(strings.TrimSpace(c.Params("ticket")))
 	if !validate.TicketFormat(ticket) {
-		httpx.WriteError(w, httpx.BadRequest("invalid_ticket", "Format nomor tiket tidak valid."))
-		return
+		return httpx.WriteError(c, httpx.BadRequest("invalid_ticket", "Format nomor tiket tidak valid."))
 	}
 
-	if ok, wait := h.trackLmtr.Allow("track:" + middleware.ClientIP(r)); !ok {
-		httpx.WriteError(w, httpx.TooManyRequests("rate_limited",
-			"Terlalu banyak permintaan. Coba lagi dalam %d detik."))
-		_ = wait
-		return
+	if ok, _ := h.trackLmtr.Allow("track:" + middleware.ClientIP(c)); !ok {
+		return httpx.WriteError(c, httpx.TooManyRequests("rate_limited",
+			"Terlalu banyak permintaan. Coba lagi nanti."))
 	}
 
-	res, err := h.svc.Track(r.Context(), ticket)
+	res, err := h.svc.Track(c.Context(), ticket)
 	if err != nil {
-		httpx.WriteError(w, err)
-		return
+		return httpx.WriteError(c, err)
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"success": true, "data": res})
+	return httpx.JSON(c, fiber.StatusOK, fiber.Map{"success": true, "data": res})
+}
+
+// detectStrictContentType memeriksa magic bytes header biner berkas secara ketat.
+func detectStrictContentType(data []byte) string {
+	if len(data) < 4 {
+		return ""
+	}
+
+	// 1. PNG: \x89PNG\r\n\x1a\n
+	if len(data) >= 8 &&
+		data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 &&
+		data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A {
+		return "image/png"
+	}
+
+	// 2. JPEG / JPG: \xFF\xD8\xFF
+	if len(data) >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
+		return "image/jpeg"
+	}
+
+	// 3. PDF: %PDF-
+	if len(data) >= 5 && data[0] == '%' && data[1] == 'P' && data[2] == 'D' && data[3] == 'F' && data[4] == '-' {
+		return "application/pdf"
+	}
+
+	// Fallback http.DetectContentType dengan whitelist ketat
+	detected := http.DetectContentType(data)
+	switch detected {
+	case "image/png":
+		return "image/png"
+	case "image/jpeg":
+		return "image/jpeg"
+	case "application/pdf":
+		return "application/pdf"
+	}
+
+	return ""
 }
 
 func allowedContentType(ct string) bool {
 	switch strings.ToLower(ct) {
-	case "image/png", "image/jpeg", "application/pdf":
+	case "image/png", "image/jpeg", "image/jpg", "application/pdf":
 		return true
 	}
 	return false

@@ -2,15 +2,15 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
-	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v3"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/validate"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/storage"
@@ -29,77 +29,123 @@ func NewHandler(repo *Repository, st *storage.Client, log *slog.Logger) *Handler
 }
 
 // Register memasang rute admin pengaduan (relatif terhadap grup /admin).
-func (h *Handler) Register(r chi.Router) {
+func (h *Handler) Register(r fiber.Router) {
 	r.Get("/pengaduan", h.List)
 	r.Get("/pengaduan/stats", h.Stats)
-	r.Patch("/pengaduan/{ticket}", h.Update)
-	r.Delete("/pengaduan/{ticket}", h.Delete)
+	r.Get("/pengaduan/:ticket/file", h.FileRedirect)
+	r.Post("/pengaduan/cleanup-storage", h.CleanupStorage)
+	r.Patch("/pengaduan/:ticket", h.Update)
+	r.Delete("/pengaduan/:ticket", h.Delete)
 }
 
 // List menangani GET /api/v1/admin/pengaduan.
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+func (h *Handler) List(c fiber.Ctx) error {
+	page, _ := strconv.Atoi(c.Query("page"))
 	if page < 1 {
 		page = 1
 	}
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	perPage, _ := strconv.Atoi(c.Query("per_page"))
 	if perPage < 1 || perPage > 1000 {
 		perPage = 20
 	}
 
-	status := strings.TrimSpace(r.URL.Query().Get("status"))
-	category := strings.TrimSpace(r.URL.Query().Get("category"))
+	status := strings.TrimSpace(c.Query("status"))
+	category := strings.TrimSpace(c.Query("category"))
 	if status != "" && !validate.Status(status) {
-		httpx.WriteError(w, httpx.BadRequest("invalid_status", "Status filter tidak valid."))
-		return
+		return httpx.WriteError(c, httpx.BadRequest("invalid_status", "Status filter tidak valid."))
 	}
 	if category != "" && !validate.Category(category) {
-		httpx.WriteError(w, httpx.BadRequest("invalid_category", "Kategori filter tidak valid."))
-		return
+		return httpx.WriteError(c, httpx.BadRequest("invalid_category", "Kategori filter tidak valid."))
 	}
 
-	res, err := h.repo.List(r.Context(), ListFilter{
+	res, err := h.repo.List(c.Context(), ListFilter{
 		Status:   status,
 		Category: category,
-		Search:   strings.TrimSpace(r.URL.Query().Get("search")),
+		Search:   strings.TrimSpace(c.Query("search")),
 		Page:     page,
 		PerPage:  perPage,
 	})
 	if err != nil {
 		h.log.Error("list pengaduan gagal", "error", err)
-		httpx.WriteError(w, httpx.Internal("db_error", "Gagal memuat daftar pengaduan."))
-		return
+		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal memuat daftar pengaduan."))
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"success": true, "data": res})
+
+	// Presign URL lampiran jika storage R2 aktif
+	if h.storage != nil && h.storage.Enabled() {
+		for i := range res.Items {
+			if res.Items[i].FileKey != nil && *res.Items[i].FileKey != "" {
+				key := strings.TrimPrefix(*res.Items[i].FileKey, "r2:")
+				if !strings.HasPrefix(key, "http://") && !strings.HasPrefix(key, "https://") {
+					url, perr := h.storage.PresignedURL(c.Context(), key, 2*time.Hour)
+					if perr != nil {
+						h.log.Warn("presign admin file gagal", "key", key, "error", perr)
+					} else {
+						res.Items[i].FileKey = &url
+					}
+				}
+			}
+		}
+	}
+
+	return httpx.JSON(c, fiber.StatusOK, fiber.Map{"success": true, "data": res})
 }
 
-// Update menangani PATCH /api/v1/admin/pengaduan/{ticket}.
-func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	ticket := strings.ToUpper(strings.TrimSpace(chi.URLParam(r, "ticket")))
+// FileRedirect menangani GET /api/v1/admin/pengaduan/:ticket/file.
+func (h *Handler) FileRedirect(c fiber.Ctx) error {
+	ticket := strings.ToUpper(strings.TrimSpace(c.Params("ticket")))
 	if !validate.TicketFormat(ticket) {
-		httpx.WriteError(w, httpx.BadRequest("invalid_ticket", "Format nomor tiket tidak valid."))
-		return
+		return httpx.WriteError(c, httpx.BadRequest("invalid_ticket", "Format nomor tiket tidak valid."))
+	}
+
+	item, err := h.repo.FindByTicket(c.Context(), ticket)
+	if errors.Is(err, ErrNotFound) {
+		return httpx.WriteError(c, httpx.NotFound("not_found", "Pengaduan tidak ditemukan."))
+	}
+	if err != nil {
+		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal mencari data pengaduan."))
+	}
+
+	if item.FileKey == nil || *item.FileKey == "" {
+		return httpx.WriteError(c, httpx.NotFound("no_file", "Pengaduan ini tidak memiliki lampiran."))
+	}
+
+	if h.storage == nil || !h.storage.Enabled() {
+		return httpx.WriteError(c, httpx.Internal("storage_unconfigured", "Penyimpanan berkas Cloudflare R2 belum aktif."))
+	}
+
+	key := strings.TrimPrefix(*item.FileKey, "r2:")
+	url, perr := h.storage.PresignedURL(c.Context(), key, 1*time.Hour)
+	if perr != nil {
+		h.log.Error("presign gagal", "key", key, "error", perr)
+		return httpx.WriteError(c, httpx.Internal("presign_failed", "Gagal membuat tautan unduhan berkas."))
+	}
+
+	return c.Redirect().To(url)
+}
+
+// Update menangani PATCH /api/v1/admin/pengaduan/:ticket.
+func (h *Handler) Update(c fiber.Ctx) error {
+	ticket := strings.ToUpper(strings.TrimSpace(c.Params("ticket")))
+	if !validate.TicketFormat(ticket) {
+		return httpx.WriteError(c, httpx.BadRequest("invalid_ticket", "Format nomor tiket tidak valid."))
 	}
 
 	var body struct {
 		Status        *string `json:"status"`
 		AdminResponse *string `json:"admin_response"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		httpx.WriteError(w, httpx.BadRequest("invalid_json", "Body JSON tidak valid."))
-		return
+	if err := c.Bind().Body(&body); err != nil {
+		return httpx.WriteError(c, httpx.BadRequest("invalid_json", "Body JSON tidak valid."))
 	}
 
 	if body.Status == nil && body.AdminResponse == nil {
-		httpx.WriteError(w, httpx.BadRequest("empty_update", "Tidak ada perubahan yang dikirim."))
-		return
+		return httpx.WriteError(c, httpx.BadRequest("empty_update", "Tidak ada perubahan yang dikirim."))
 	}
 
 	var status string
 	if body.Status != nil {
 		if !validate.Status(*body.Status) {
-			httpx.WriteError(w, httpx.BadRequest("invalid_status", "Status tidak valid."))
-			return
+			return httpx.WriteError(c, httpx.BadRequest("invalid_status", "Status tidak valid."))
 		}
 		status = *body.Status
 	} else {
@@ -107,112 +153,177 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if body.AdminResponse != nil && len([]rune(*body.AdminResponse)) > 10000 {
-		httpx.WriteError(w, httpx.BadRequest("invalid_response", "Tanggapan maksimal 10.000 karakter."))
-		return
+		return httpx.WriteError(c, httpx.BadRequest("invalid_response", "Tanggapan maksimal 10.000 karakter."))
 	}
 
-	if err := h.repo.UpdateStatusAndResponse(r.Context(), ticket, status, body.AdminResponse); err != nil {
+	if err := h.repo.UpdateStatusAndResponse(c.Context(), ticket, status, body.AdminResponse); err != nil {
 		if errors.Is(err, ErrNotFound) {
-			httpx.WriteError(w, httpx.NotFound("not_found", "Pengaduan tidak ditemukan."))
-			return
+			return httpx.WriteError(c, httpx.NotFound("not_found", "Pengaduan tidak ditemukan."))
 		}
 		h.log.Error("update pengaduan gagal", "ticket", ticket, "error", err)
-		httpx.WriteError(w, httpx.Internal("db_error", "Gagal memperbarui pengaduan."))
-		return
+		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal memperbarui pengaduan."))
 	}
 
-	httpx.JSON(w, http.StatusOK, map[string]any{
+	return httpx.JSON(c, fiber.StatusOK, fiber.Map{
 		"success": true,
 		"message": "Pengaduan berhasil diperbarui.",
 	})
 }
 
-// Delete menangani DELETE /api/v1/admin/pengaduan/{ticket}.
-func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	ticket := strings.ToUpper(strings.TrimSpace(chi.URLParam(r, "ticket")))
+// Delete menangani DELETE /api/v1/admin/pengaduan/:ticket.
+func (h *Handler) Delete(c fiber.Ctx) error {
+	ticket := strings.ToUpper(strings.TrimSpace(c.Params("ticket")))
 	if !validate.TicketFormat(ticket) {
-		httpx.WriteError(w, httpx.BadRequest("invalid_ticket", "Format nomor tiket tidak valid."))
-		return
+		return httpx.WriteError(c, httpx.BadRequest("invalid_ticket", "Format nomor tiket tidak valid."))
 	}
 
-	fileKey, err := h.repo.Delete(r.Context(), ticket)
+	fileKey, err := h.repo.Delete(c.Context(), ticket)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			httpx.WriteError(w, httpx.NotFound("not_found", "Pengaduan tidak ditemukan."))
-			return
+			return httpx.WriteError(c, httpx.NotFound("not_found", "Pengaduan tidak ditemukan."))
 		}
 		h.log.Error("hapus pengaduan gagal", "ticket", ticket, "error", err)
-		httpx.WriteError(w, httpx.Internal("db_error", "Gagal menghapus pengaduan."))
-		return
+		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal menghapus pengaduan."))
 	}
 
 	// Hapus lampiran R2 bila ada (gagal hanya dilog, baris tetap terhapus).
-	if fileKey != nil && h.storage.Enabled() {
+	if fileKey != nil && *fileKey != "" && h.storage != nil && h.storage.Enabled() {
 		key := strings.TrimPrefix(*fileKey, "r2:")
-		if err := h.storage.Delete(r.Context(), key); err != nil {
-			h.log.Warn("hapus objek R2 gagal", "key", key, "error", err)
+		key = strings.TrimPrefix(key, "/")
+		if key != "" {
+			if err := h.storage.Delete(c.Context(), key); err != nil {
+				h.log.Warn("hapus objek R2 gagal", "key", key, "error", err)
+			} else {
+				h.log.Info("berhasil menghapus file R2 saat delete pengaduan", "key", key, "ticket", ticket)
+			}
 		}
 	}
 
-	httpx.JSON(w, http.StatusOK, map[string]any{"success": true})
+	return httpx.JSON(c, fiber.StatusOK, fiber.Map{"success": true})
+}
+
+// CleanupStorage menangani POST /api/v1/admin/pengaduan/cleanup-storage.
+// Memindai seluruh berkas di Cloudflare R2 dan menghapus berkas yatim (orphan) yang tiketnya sudah terhapus di database.
+func (h *Handler) CleanupStorage(c fiber.Ctx) error {
+	if h.storage == nil || !h.storage.Enabled() {
+		return httpx.WriteError(c, httpx.BadRequest("storage_unconfigured", "Cloudflare R2 belum dikonfigurasi."))
+	}
+
+	activeKeys, err := h.repo.GetAllFileKeys(c.Context())
+	if err != nil {
+		h.log.Error("gagal mengambil active keys dari DB", "error", err)
+		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal membaca data pengaduan."))
+	}
+
+	// Normalisasi active keys menjadi map untuk lookup O(1)
+	activeMap := make(map[string]struct{}, len(activeKeys))
+	for _, k := range activeKeys {
+		norm := strings.TrimPrefix(k, "r2:")
+		norm = strings.TrimPrefix(norm, "/")
+		activeMap[norm] = struct{}{}
+	}
+
+	// Ambil semua objek di R2 under folder 'pengaduan/'
+	allR2Keys, err := h.storage.ListObjects(c.Context(), "pengaduan/")
+	if err != nil {
+		h.log.Error("gagal list objek R2", "error", err)
+		return httpx.WriteError(c, httpx.Internal("r2_list_error", "Gagal memindai objek di Cloudflare R2."))
+	}
+
+	var deleted []string
+	for _, r2Key := range allR2Keys {
+		normR2 := strings.TrimPrefix(r2Key, "/")
+		// Jika file di R2 tidak lagi tercatat di database, hapus dari R2
+		if _, exists := activeMap[normR2]; !exists {
+			if err := h.storage.Delete(c.Context(), normR2); err != nil {
+				h.log.Warn("gagal hapus orphan file R2", "key", normR2, "error", err)
+			} else {
+				h.log.Info("orphan file R2 berhasil dibersihkan", "key", normR2)
+				deleted = append(deleted, normR2)
+			}
+		}
+	}
+
+	return httpx.JSON(c, fiber.StatusOK, fiber.Map{
+		"success": true,
+		"message": fmt.Sprintf("Pembersihan Cloudflare R2 selesai. %d file sampah berhasil dihapus.", len(deleted)),
+		"data": fiber.Map{
+			"deleted_count": len(deleted),
+			"deleted_files": deleted,
+			"active_count":  len(activeKeys),
+			"total_r2":      len(allR2Keys),
+		},
+	})
 }
 
 // Stats menangani GET /api/v1/admin/pengaduan/stats.
-func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func (h *Handler) Stats(c fiber.Ctx) error {
+	ctx := c.Context()
 
-	var byStatus map[string]int
-	if err := h.scanMap(ctx, `
-		SELECT status, count(*) FROM `+h.repo.table+` GROUP BY status`, &byStatus); err != nil {
-		h.log.Error("stats status gagal", "error", err)
-		httpx.WriteError(w, httpx.Internal("db_error", "Gagal memuat statistik."))
-		return
-	}
+	var (
+		byStatus    map[string]int
+		byCategory  map[string]int
+		byDay       []map[string]any
+		total       int
+		avgRating   *float64
+		errStatus   error
+		errCategory error
+		errDay      error
+		wg          sync.WaitGroup
+	)
 
-	var byCategory map[string]int
-	if err := h.scanMap(ctx, `
-		SELECT category, count(*) FROM `+h.repo.table+` GROUP BY category`, &byCategory); err != nil {
-		httpx.WriteError(w, httpx.Internal("db_error", "Gagal memuat statistik."))
-		return
-	}
+	wg.Add(3)
 
-	var byDay []map[string]any
-	rows, err := h.repo.pool.Query(ctx, `
-		SELECT to_char(created_at AT TIME ZONE 'Asia/Makassar', 'YYYY-MM-DD') AS day, count(*)
-		FROM `+h.repo.table+`
-		WHERE created_at > NOW() - INTERVAL '30 days'
-		GROUP BY day ORDER BY day`)
-	if err != nil {
-		httpx.WriteError(w, httpx.Internal("db_error", "Gagal memuat statistik."))
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var day string
-		var n int
-		if err := rows.Scan(&day, &n); err != nil {
-			continue
+	go func() {
+		defer wg.Done()
+		errStatus = h.scanMap(ctx, `SELECT status, count(*) FROM `+h.repo.table+` GROUP BY status`, &byStatus)
+	}()
+
+	go func() {
+		defer wg.Done()
+		errCategory = h.scanMap(ctx, `SELECT category, count(*) FROM `+h.repo.table+` GROUP BY category`, &byCategory)
+	}()
+
+	go func() {
+		defer wg.Done()
+		rows, err := h.repo.pool.Query(ctx, `
+			SELECT to_char(created_at AT TIME ZONE 'Asia/Makassar', 'YYYY-MM-DD') AS day, count(*)
+			FROM `+h.repo.table+`
+			WHERE created_at > NOW() - INTERVAL '30 days'
+			GROUP BY day ORDER BY day`)
+		if err != nil {
+			errDay = err
+			return
 		}
-		byDay = append(byDay, map[string]any{"date": day, "count": n})
+		defer rows.Close()
+		for rows.Next() {
+			var day string
+			var n int
+			if err := rows.Scan(&day, &n); err == nil {
+				byDay = append(byDay, map[string]any{"date": day, "count": n})
+			}
+		}
+	}()
+
+	// Query total & rating rata-rata sekaligus dalam 1 query
+	_ = h.repo.pool.QueryRow(ctx, `SELECT count(*), AVG(rating) FROM `+h.repo.table).Scan(&total, &avgRating)
+
+	wg.Wait()
+
+	if errStatus != nil || errCategory != nil || errDay != nil {
+		h.log.Error("stats query gagal", "errStatus", errStatus, "errCategory", errCategory, "errDay", errDay)
+		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal memuat statistik."))
 	}
 
-	var total int
-	_ = h.repo.pool.QueryRow(ctx,
-		`SELECT count(*) FROM `+h.repo.table).Scan(&total)
-
-	var avgRating *float64
-	_ = h.repo.pool.QueryRow(ctx,
-		`SELECT AVG(rating) FROM `+h.repo.table+` WHERE rating IS NOT NULL`).Scan(&avgRating)
-
-	httpx.JSON(w, http.StatusOK, map[string]any{
+	return httpx.JSON(c, fiber.StatusOK, fiber.Map{
 		"success": true,
-		"data": map[string]any{
-			"total":          total,
-			"by_status":      byStatus,
-			"by_category":    byCategory,
-			"last_30_days":   byDay,
-			"avg_rating":     roundPtr(avgRating, 2),
-			"generated_at":   time.Now().Format(time.RFC3339),
+		"data": fiber.Map{
+			"total":        total,
+			"by_status":    byStatus,
+			"by_category":  byCategory,
+			"last_30_days": byDay,
+			"avg_rating":   roundPtr(avgRating, 2),
+			"generated_at": time.Now().Format(time.RFC3339),
 		},
 	})
 }

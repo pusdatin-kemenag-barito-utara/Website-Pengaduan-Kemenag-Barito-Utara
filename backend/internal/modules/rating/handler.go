@@ -1,11 +1,9 @@
 package rating
 
 import (
-	"encoding/json"
-	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v3"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/middleware"
 )
@@ -19,34 +17,32 @@ type Handler struct {
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Register memasang rute modul rating.
-func (h *Handler) Register(r chi.Router) {
-	r.Post("/pengaduan/{ticket}/rating", h.Rate)
+func (h *Handler) Register(r fiber.Router) {
+	r.Post("/pengaduan/:ticket/rating", h.Rate)
 }
 
-// Rate menangani POST /api/v1/pengaduan/{ticket}/rating.
-func (h *Handler) Rate(w http.ResponseWriter, r *http.Request) {
-	ticket := strings.ToUpper(strings.TrimSpace(chi.URLParam(r, "ticket")))
+// Rate menangani POST /api/v1/pengaduan/:ticket/rating.
+func (h *Handler) Rate(c fiber.Ctx) error {
+	ticket := strings.ToUpper(strings.TrimSpace(c.Params("ticket")))
 
 	var body struct {
 		Rating   int    `json:"rating"`
 		Feedback string `json:"feedback,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		httpx.WriteError(w, httpx.BadRequest("invalid_json", "Body JSON tidak valid."))
-		return
+	if err := c.Bind().Body(&body); err != nil {
+		return httpx.WriteError(c, httpx.BadRequest("invalid_json", "Body JSON tidak valid."))
 	}
 
-	err := h.svc.Rate(r.Context(), &RateInput{
+	err := h.svc.Rate(c.Context(), &RateInput{
 		Ticket:   ticket,
 		Rating:   body.Rating,
 		Feedback: body.Feedback,
-		ClientIP: middleware.ClientIP(r),
+		ClientIP: middleware.ClientIP(c),
 	})
 	if err != nil {
-		httpx.WriteError(w, err)
-		return
+		return httpx.WriteError(c, err)
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{
+	return httpx.JSON(c, fiber.StatusOK, fiber.Map{
 		"success": true,
 		"message": "Terima kasih atas penilaian Anda.",
 	})

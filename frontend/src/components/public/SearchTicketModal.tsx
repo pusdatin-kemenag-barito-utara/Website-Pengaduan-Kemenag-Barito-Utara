@@ -61,14 +61,17 @@ export default function SearchTicketModal({
     setTicketResult(null);
     setRatingMsg(null);
 
+    const cleanTicket = searchTicket.trim().toUpperCase();
+    analytics.searchTicketAttempt(cleanTicket);
+
     try {
-      const cleanTicket = searchTicket.trim().toUpperCase();
       const data = await checkTicketStatus(cleanTicket);
       setTicketResult(data);
-      analytics.searchTicket(cleanTicket);
+      analytics.searchTicket(cleanTicket, data.status);
       if (data.rating) setRatingVal(data.rating);
       if (data.user_feedback) setUserFeedback(data.user_feedback);
     } catch (err) {
+      analytics.searchTicketNotFound(cleanTicket);
       setSearchError(err instanceof Error ? err.message : 'Terjadi kesalahan saat mencari tiket.');
     } finally {
       setIsSearching(false);
@@ -94,7 +97,7 @@ export default function SearchTicketModal({
     try {
       const message = await submitRating(ticketResult.ticket_number, ratingVal, userFeedback);
       setRatingMsg(message);
-      analytics.rateService(ticketResult.ticket_number, ratingVal);
+      analytics.rateService(ticketResult.ticket_number, ratingVal, Boolean(userFeedback?.trim()));
     } catch (err) {
       setRatingMsg(err instanceof Error ? err.message : 'Gagal menyimpan penilaian.');
     } finally {
@@ -115,7 +118,7 @@ export default function SearchTicketModal({
         : { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300', dot: 'bg-amber-400' };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 print:hidden">
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 print:hidden font-['Plus_Jakarta_Sans',sans-serif]">
       <div className="w-full max-w-[90vw] lg:max-w-5xl xl:max-w-6xl bg-white rounded-3xl shadow-2xl shadow-slate-900/25 border border-slate-200/80 overflow-hidden relative flex flex-col max-h-[94vh]">
         <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-100 shrink-0 bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900">
           <div className="flex items-center gap-4">
@@ -157,7 +160,7 @@ export default function SearchTicketModal({
                 value={searchTicket}
                 onChange={(e) => setSearchTicket(e.target.value)}
                 placeholder="SGT-YYYYMMDD-XXXX"
-                className="w-full pl-10 pr-20 py-3 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 uppercase tracking-widest font-mono font-bold transition-all shadow-sm"
+                className="w-full pl-10 pr-20 py-3 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 uppercase tracking-widest font-bold transition-all shadow-sm"
                 required
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -231,7 +234,7 @@ export default function SearchTicketModal({
               <div className="lg:col-span-2 p-6 sm:p-8 border-b lg:border-b-0 lg:border-r border-slate-100 bg-slate-50/40 flex flex-col gap-6">
                 <div>
                   <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-1">Nomor Tiket</p>
-                  <p className="font-mono text-xl sm:text-2xl font-black text-emerald-900 tracking-wide leading-tight break-all">
+                  <p className="text-xl sm:text-2xl font-black text-emerald-900 tracking-wide leading-tight break-all">
                     {ticketResult.ticket_number}
                   </p>
                   <p className="text-[11px] text-slate-400 font-medium mt-1.5">
@@ -430,7 +433,7 @@ export default function SearchTicketModal({
                 <p className="font-black text-slate-700 text-base">Masukkan nomor tiket Anda</p>
                 <p className="text-slate-400 text-sm font-medium mt-1 max-w-sm">
                   Masukkan kode tiket SI-GESIT (contoh:{' '}
-                  <span className="font-mono font-bold text-emerald-700">SGT-20260802-1001</span>) untuk melihat status penanganan laporan Anda.
+                  <span className="font-bold text-emerald-700">SGT-20260802-1001</span>) untuk melihat status penanganan laporan Anda.
                 </p>
               </div>
             </div>

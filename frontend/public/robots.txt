@@ -1,6 +1,7 @@
 # Robots.txt — SI-GESIT Kemenag Barito Utara
 User-agent: *
 Allow: /
+Disallow: /pusdatin/
 Disallow: /admin
 Disallow: /api/
 

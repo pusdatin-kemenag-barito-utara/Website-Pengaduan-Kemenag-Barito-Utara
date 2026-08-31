@@ -30,7 +30,7 @@ export default function NotFoundPage({ currentPath = '' }: NotFoundPageProps) {
 
         {/* Big Bold 404 Focus */}
         <div className="space-y-1">
-          <h1 className="text-8xl sm:text-9xl font-black text-slate-900 tracking-tighter leading-none select-none font-mono">
+          <h1 className="text-8xl sm:text-9xl font-black text-slate-900 tracking-tighter leading-none select-none">
             404
           </h1>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 pt-2">
@@ -43,7 +43,7 @@ export default function NotFoundPage({ currentPath = '' }: NotFoundPageProps) {
 
         {/* Path Indicator */}
         {currentPath && (
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-xs font-mono max-w-full truncate">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-xs max-w-full truncate">
             <span className="text-slate-400 font-bold">Path:</span>
             <span className="text-emerald-700 font-extrabold truncate">{currentPath}</span>
           </div>

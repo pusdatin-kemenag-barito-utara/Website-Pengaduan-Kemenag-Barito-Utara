@@ -54,6 +54,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     /* body non-JSON */
   }
   if (!res.ok || (body && typeof body === 'object' && (body as { success?: boolean }).success === false)) {
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('admin:unauthorized'));
+    }
     const msg = (body as { message?: string })?.message || `Permintaan gagal (HTTP ${res.status}).`;
     throw new Error(msg);
   }
@@ -72,9 +75,9 @@ export async function adminLogout(): Promise<void> {
   await request<{ success: boolean }>('/api/v1/admin/logout', { method: 'POST' });
 }
 
-export async function adminMe(): Promise<AdminMe> {
-  const body = await request<{ data: AdminMe }>('/api/v1/admin/me');
-  return body.data;
+export async function adminMe(): Promise<AdminMe | null> {
+  const body = await request<{ data: AdminMe | null }>('/api/v1/admin/me');
+  return body?.data ?? null;
 }
 
 export async function adminListPengaduan(params: {
@@ -108,6 +111,13 @@ export async function adminUpdatePengaduan(ticket: string, patch: { status?: str
 
 export async function adminDeletePengaduan(ticket: string): Promise<void> {
   await request<{ success: boolean }>(`/api/v1/admin/pengaduan/${encodeURIComponent(ticket)}`, { method: 'DELETE' });
+}
+
+export async function adminCleanupStorage(): Promise<{ deleted_count: number; deleted_files: string[]; active_count: number; total_r2: number }> {
+  const body = await request<{ data: { deleted_count: number; deleted_files: string[]; active_count: number; total_r2: number } }>('/api/v1/admin/pengaduan/cleanup-storage', {
+    method: 'POST',
+  });
+  return body.data;
 }
 
 export async function adminListLayanan(): Promise<Layanan[]> {

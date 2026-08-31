@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Download, QrCode, ArrowLeft, Printer } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { analytics } from '../lib/analytics';
 
 export default function BarcodePage() {
   const [targetUrl, setTargetUrl] = useState<string>('http://pengaduan.kemenag-baritoutara.com');
@@ -69,6 +70,7 @@ export default function BarcodePage() {
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
+      analytics.barcodeAction('download');
     } catch (err) {
       console.error('Error generating QR:', err);
       alert('Gagal mengunduh QR Code. Silakan coba lagi.');
@@ -78,6 +80,7 @@ export default function BarcodePage() {
   };
 
   const handlePrint = () => {
+    analytics.barcodeAction('print');
     window.print();
   };
 

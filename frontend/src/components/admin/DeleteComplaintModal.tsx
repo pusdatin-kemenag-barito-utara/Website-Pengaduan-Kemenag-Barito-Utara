@@ -26,7 +26,7 @@ export default function DeleteComplaintModal({
           <h3 className="text-lg font-black text-slate-900">Hapus Tiket Pengaduan?</h3>
           <p className="text-xs text-slate-500 font-medium">
             Apakah Anda yakin ingin menghapus tiket{' '}
-            <span className="font-mono font-bold text-slate-900">#{itemToDelete.ticket_number}</span>? Tindakan ini
+            <span className="font-bold text-slate-900">#{itemToDelete.ticket_number}</span>? Tindakan ini
             tidak dapat dibatalkan.
           </p>
         </div>

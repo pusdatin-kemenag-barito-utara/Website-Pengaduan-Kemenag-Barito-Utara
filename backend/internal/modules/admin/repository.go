@@ -136,6 +136,52 @@ func (r *Repository) List(ctx context.Context, f ListFilter) (*ListResult, error
 	return &ListResult{Items: items, Total: total, Page: f.Page, Pages: pages}, nil
 }
 
+// FindByTicket mengambil satu pengaduan berdasarkan nomor tiket.
+func (r *Repository) FindByTicket(ctx context.Context, ticket string) (*Item, error) {
+	var it Item
+	err := r.pool.QueryRow(ctx, `
+		SELECT id::text, ticket_number, category, service_unit, full_name,
+			phone_number, content, is_anonymous, status, admin_response,
+			file_url, rating, created_at, updated_at
+		FROM `+r.table+`
+		WHERE ticket_number = $1`,
+		ticket,
+	).Scan(
+		&it.ID, &it.TicketNumber, &it.Category, &it.ServiceUnit, &it.FullName,
+		&it.PhoneNumber, &it.Content, &it.IsAnonymous, &it.Status, &it.AdminResponse,
+		&it.FileKey, &it.Rating, &it.CreatedAt, &it.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &it, nil
+}
+
+// GetAllFileKeys mengambil semua file_url aktif dari tabel pengaduan.
+func (r *Repository) GetAllFileKeys(ctx context.Context) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT file_url
+		FROM `+r.table+`
+		WHERE file_url IS NOT NULL AND file_url != ''`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err == nil && k != "" {
+			keys = append(keys, k)
+		}
+	}
+	return keys, rows.Err()
+}
+
 // UpdateStatusAndResponse memperbarui status dan tanggapan admin.
 func (r *Repository) UpdateStatusAndResponse(ctx context.Context, ticket, status string, response *string) error {
 	ct, err := r.pool.Exec(ctx, `

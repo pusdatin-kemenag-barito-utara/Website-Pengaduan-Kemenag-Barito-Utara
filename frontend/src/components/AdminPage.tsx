@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { CheckCircle2, X } from 'lucide-react';
 import type { Layanan } from '../lib/api';
 import {
   adminDeletePengaduan, adminListLayanan, adminListPengaduan,
   adminLogout, adminMe, adminStats, adminUpdatePengaduan,
 } from '../lib/apiAdmin';
 import type { AdminItem, AdminStats, AdminMe } from '../lib/apiAdmin';
+import { analytics } from '../lib/analytics';
 import AdminLogin from './admin/AdminLogin';
 import AdminSidebar from './admin/AdminSidebar';
 import AdminMobileHeader from './admin/AdminMobileHeader';
@@ -22,6 +24,7 @@ export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [, setAdminInfo] = useState<AdminMe | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [showLoginToast, setShowLoginToast] = useState<boolean>(false);
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<Tab>('pengaduan');
@@ -65,7 +68,16 @@ export default function AdminPage() {
         setTotalItems(res.total);
         setCurrentPage(res.page);
       } catch (err) {
-        setListError(err instanceof Error ? err.message : 'Gagal memuat daftar pengaduan.');
+        const msg = err instanceof Error ? err.message : 'Gagal memuat daftar pengaduan.';
+        if (msg.toLowerCase().includes('sesi') || msg.toLowerCase().includes('unauthorized')) {
+          setIsAuthenticated(false);
+          setAdminInfo(null);
+          setList([]);
+          setStats(null);
+          setLayananList([]);
+          return;
+        }
+        setListError(msg);
       } finally {
         setIsLoading(false);
       }
@@ -77,8 +89,15 @@ export default function AdminPage() {
     setIsLayananLoading(true);
     try {
       setLayananList(await adminListLayanan());
-    } catch {
-      /* biarkan list lama */
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.toLowerCase().includes('sesi') || msg.toLowerCase().includes('unauthorized')) {
+        setIsAuthenticated(false);
+        setAdminInfo(null);
+        setList([]);
+        setStats(null);
+        setLayananList([]);
+      }
     } finally {
       setIsLayananLoading(false);
     }
@@ -88,37 +107,92 @@ export default function AdminPage() {
     try {
       const s = await adminStats();
       setStats(s);
-    } catch {
-      /* biarkan kosong */
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.toLowerCase().includes('sesi') || msg.toLowerCase().includes('unauthorized')) {
+        setIsAuthenticated(false);
+        setAdminInfo(null);
+        setList([]);
+        setStats(null);
+        setLayananList([]);
+      }
     }
   }, []);
 
-  // ===== Auth Check on mount =====
+  // ===== Auth Check on mount & Browser History Navigation (Back/Next) =====
   useEffect(() => {
-    adminMe()
-      .then((me: AdminMe) => {
-        setAdminInfo(me);
-        setIsAuthenticated(true);
-      })
-      .catch(() => setIsAuthenticated(false))
-      .finally(() => setIsAuthChecked(true));
+    const checkAuth = () => {
+      adminMe()
+        .then((me: AdminMe | null) => {
+          if (me) {
+            setAdminInfo(me);
+            setIsAuthenticated(true);
+          } else {
+            setIsAuthenticated(false);
+            setAdminInfo(null);
+            setList([]);
+            setStats(null);
+            setLayananList([]);
+          }
+        })
+        .catch(() => {
+          setIsAuthenticated(false);
+          setAdminInfo(null);
+          setList([]);
+          setStats(null);
+          setLayananList([]);
+        })
+        .finally(() => setIsAuthChecked(true));
+    };
+
+    checkAuth();
+
+    const handleUnauthorized = () => {
+      setIsAuthenticated(false);
+      setAdminInfo(null);
+      setList([]);
+      setStats(null);
+      setLayananList([]);
+    };
+
+    window.addEventListener('admin:unauthorized', handleUnauthorized);
+    window.addEventListener('pageshow', checkAuth);
+    window.addEventListener('popstate', checkAuth);
+    window.addEventListener('focus', checkAuth);
+
+    return () => {
+      window.removeEventListener('admin:unauthorized', handleUnauthorized);
+      window.removeEventListener('pageshow', checkAuth);
+      window.removeEventListener('popstate', checkAuth);
+      window.removeEventListener('focus', checkAuth);
+    };
   }, []);
+
+  // Auto-dismiss login toast after 5 seconds
+  useEffect(() => {
+    if (showLoginToast) {
+      const timer = setTimeout(() => {
+        setShowLoginToast(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showLoginToast]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      void fetchPengaduan(1);
-      void fetchLayanan();
-      void fetchStats();
+      if (activeTab === 'pengaduan') {
+        void fetchPengaduan(1);
+        void fetchStats();
+      } else if (activeTab === 'layanan') {
+        void fetchLayanan();
+      } else if (activeTab === 'statistik') {
+        void fetchStats();
+      }
     }
-  }, [isAuthenticated, fetchPengaduan, fetchLayanan, fetchStats]);
-
-  useEffect(() => {
-    if (activeTab === 'statistik' && isAuthenticated) {
-      void fetchStats();
-    }
-  }, [activeTab, isAuthenticated, fetchStats]);
+  }, [isAuthenticated, activeTab, fetchPengaduan, fetchLayanan, fetchStats]);
 
   const handleLogout = async () => {
+    analytics.adminLogout();
     try {
       await adminLogout();
     } catch {
@@ -197,6 +271,7 @@ export default function AdminPage() {
         onLoginSuccess={(me) => {
           setAdminInfo(me);
           setIsAuthenticated(true);
+          setShowLoginToast(true);
         }}
       />
     );
@@ -204,7 +279,7 @@ export default function AdminPage() {
 
   // ===== Authenticated Admin Dashboard =====
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 flex font-sans">
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex font-sans relative">
       {/* Sidebar Navigation */}
       <AdminSidebar
         activeTab={activeTab}
@@ -278,6 +353,36 @@ export default function AdminPage() {
         onConfirmDelete={handleDeleteConfirm}
         isDeleting={isDeleting}
       />
+
+      {/* Toast Notifikasi Berhasil Login di Kanan Bawah */}
+      {showLoginToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-gradient-to-br from-slate-900 via-slate-900/95 to-emerald-950/80 text-white border border-emerald-500/40 backdrop-blur-xl shadow-2xl shadow-emerald-950/40 rounded-2xl p-4 flex items-start gap-3.5 max-w-sm">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 text-emerald-400 border border-emerald-500/30 shrink-0 shadow-inner">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                Login Berhasil
+              </p>
+              <p className="text-xs text-slate-200 font-medium mt-0.5 leading-snug">
+                Selamat datang kembali
+              </p>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] text-emerald-400/90 font-medium">Sesi Aktif</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowLoginToast(false)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/80 transition-colors cursor-pointer"
+              aria-label="Tutup notifikasi"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -147,7 +147,10 @@ export default function PublicPage() {
           {/* Mobile Guide Bar */}
           <div className="col-span-1 lg:hidden print:hidden">
             <div
-              onClick={() => setIsGuideModalOpen(true)}
+              onClick={() => {
+                setIsGuideModalOpen(true);
+                analytics.openGuideModal();
+              }}
               className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-white to-teal-50 border border-emerald-200/80 shadow-sm flex items-center justify-between gap-3 cursor-pointer hover:border-emerald-300 transition-all active:scale-[0.99]"
             >
               <div className="flex items-center gap-3 min-w-0">

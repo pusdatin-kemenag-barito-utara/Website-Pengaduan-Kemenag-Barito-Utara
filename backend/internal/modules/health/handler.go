@@ -3,10 +3,9 @@ package health
 import (
 	"context"
 	"log/slog"
-	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v3"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/config"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/database"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
@@ -25,18 +24,18 @@ func New(cfg *config.Config, db *database.DB, log *slog.Logger, version string) 
 	return &Handler{cfg: cfg, db: db, log: log, version: version}
 }
 
-// Register memasang rute modul health.
-func (h *Handler) Register(r chi.Router) {
+// Register memasang rute modul health ke router Fiber.
+func (h *Handler) Register(r fiber.Router) {
 	r.Get("/health", h.Health)
 }
 
-func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Health(c fiber.Ctx) error {
 	start := time.Now()
 
 	dbConnected := false
 	dbError := ""
 	if h.db != nil {
-		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
 		defer cancel()
 		if err := h.db.Ping(ctx); err != nil {
 			dbError = err.Error()
@@ -50,18 +49,18 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	latency := time.Since(start).Milliseconds()
 
 	status := "healthy"
-	httpStatus := http.StatusOK
+	httpStatus := fiber.StatusOK
 	if !dbConnected {
 		status = "degraded"
-		httpStatus = http.StatusServiceUnavailable
+		httpStatus = fiber.StatusServiceUnavailable
 	}
 
-	httpx.JSON(w, httpStatus, map[string]any{
+	return httpx.JSON(c, httpStatus, fiber.Map{
 		"status":    status,
 		"service":   "SI-GESIT Pengaduan Kemenag Barito Utara",
 		"version":   h.version,
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"database": map[string]any{
+		"database": fiber.Map{
 			"connected": dbConnected,
 			"schema":    h.cfg.AppSchema,
 			"error":     dbError,
