@@ -49,7 +49,7 @@ RUN npm run build
 # Stage 4: Production Runtime (Unified Single Container)
 # ===================================================
 FROM node:22-alpine AS runner
-RUN apk add --no-cache ca-certificates tzdata wget dos2unix
+RUN apk add --no-cache ca-certificates tzdata wget curl dos2unix
 WORKDIR /app
 
 ENV NODE_ENV=production
