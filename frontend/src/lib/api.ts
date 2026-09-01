@@ -81,3 +81,24 @@ export async function submitRating(ticket: string, rating: number, feedback: str
   });
   return body.message;
 }
+
+export interface AppStatusResult {
+  success: boolean;
+  is_maintenance: boolean;
+  status: 'online' | 'maintenance';
+  app_name: string;
+}
+
+export async function getAppStatus(): Promise<AppStatusResult> {
+  try {
+    const body = await request<AppStatusResult>('/api/v1/app-status');
+    return body;
+  } catch {
+    return {
+      success: true,
+      is_maintenance: false,
+      status: 'online',
+      app_name: 'Pengaduan SI-GESIT',
+    };
+  }
+}

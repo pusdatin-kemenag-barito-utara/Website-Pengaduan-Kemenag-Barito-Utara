@@ -17,7 +17,9 @@ type Config struct {
 
 	DatabaseURL string
 
-	PusdatinSchema string
+	AdminEmail    string
+	AdminPassword string
+	AdminName     string
 
 	R2AccessKeyID     string
 	R2SecretAccessKey string
@@ -26,15 +28,12 @@ type Config struct {
 
 	TurnstileSecretKey string
 
-	SupabaseURL     string
-	SupabaseAnonKey string
-
-	SessionSecret    string
-	SessionTTLHours  int
-	CookieSecure     bool
-	CookieSameSite   string
-	PublicSiteURL    string
-	AllowDevOrigin   string
+	SessionSecret   string
+	SessionTTLHours int
+	CookieSecure    bool
+	CookieSameSite  string
+	PublicSiteURL   string
+	AllowDevOrigin  string
 }
 
 // Load membaca konfigurasi dari file .env.local / .env di direktori kerja
@@ -47,29 +46,39 @@ func Load() (*Config, error) {
 		loadDotEnv(strings.Repeat("../", i) + ".env.local")
 	}
 
+	adminEmail := getEnv("SUPER_ADMIN_EMAIL", getEnv("ADMIN_EMAIL", os.Getenv("ADMIN_USERNAME")))
+	adminPass := getEnv("SUPER_ADMIN_PASSWORD", os.Getenv("ADMIN_PASSWORD"))
+	adminName := getEnv("SUPER_ADMIN_NAME", getEnv("ADMIN_NAME", "Super Admin"))
+
 	cfg := &Config{
-		Port:             getEnv("PORT", "8080"),
-		Host:             getEnv("HOST", "0.0.0.0"),
-		AppSchema:        getEnv("DB_SCHEMA", "kemenag-pengaduan"),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		PusdatinSchema:   getEnv("PUSDATIN_SCHEMA", "pusdatin"),
-		R2AccessKeyID:    os.Getenv("R2_ACCESS_KEY_ID"),
+		Port:              getEnv("PORT", "8080"),
+		Host:              getEnv("HOST", "0.0.0.0"),
+		AppSchema:         getEnv("DB_SCHEMA", "kemenag-pengaduan"),
+		DatabaseURL:       os.Getenv("DATABASE_URL"),
+		AdminEmail:        adminEmail,
+		AdminPassword:     adminPass,
+		AdminName:         adminName,
+		R2AccessKeyID:     os.Getenv("R2_ACCESS_KEY_ID"),
 		R2SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
-		R2EndpointURL:    os.Getenv("R2_ENDPOINT_URL"),
+		R2EndpointURL:     os.Getenv("R2_ENDPOINT_URL"),
 		R2BucketPengaduan: getEnv("R2_BUCKET_PENGADUAN", "data-pengaduan"),
 		TurnstileSecretKey: os.Getenv("TURNSTILE_SECRET_KEY"),
-		SupabaseURL:     os.Getenv("SUPABASE_URL"),
-		SupabaseAnonKey: os.Getenv("SUPABASE_ANON_KEY"),
-		SessionSecret:   os.Getenv("SESSION_SECRET"),
-		SessionTTLHours: getInt("SESSION_TTL_HOURS", 24),
-		CookieSecure:    getBool("COOKIE_SECURE", true),
-		CookieSameSite:  getEnv("COOKIE_SAMESITE", "lax"),
-		PublicSiteURL:   getEnv("PUBLIC_SITE_URL", "http://localhost:3000"),
-		AllowDevOrigin:  os.Getenv("ALLOW_DEV_ORIGIN"),
+		SessionSecret:     os.Getenv("SESSION_SECRET"),
+		SessionTTLHours:   getInt("SESSION_TTL_HOURS", 24),
+		CookieSecure:      getBool("COOKIE_SECURE", true),
+		CookieSameSite:    getEnv("COOKIE_SAMESITE", "lax"),
+		PublicSiteURL:     getEnv("PUBLIC_SITE_URL", "http://localhost:3000"),
+		AllowDevOrigin:    os.Getenv("ALLOW_DEV_ORIGIN"),
 	}
 
 	if cfg.SessionSecret == "" {
-		return nil, fmt.Errorf("SESSION_SECRET wajib diisi")
+		return nil, fmt.Errorf("SESSION_SECRET wajib diisi pada file konfigurasi environment (.env.local)")
+	}
+	if cfg.AdminPassword == "" {
+		return nil, fmt.Errorf("ADMIN_PASSWORD atau SUPER_ADMIN_PASSWORD wajib diisi pada file konfigurasi environment (.env.local)")
+	}
+	if cfg.AdminEmail == "" {
+		return nil, fmt.Errorf("ADMIN_EMAIL atau SUPER_ADMIN_EMAIL wajib diisi pada file konfigurasi environment (.env.local)")
 	}
 	return cfg, nil
 }
@@ -123,5 +132,9 @@ func loadDotEnv(path string) {
 		if _, exists := os.LookupEnv(key); !exists {
 			os.Setenv(key, val)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		// abaikan error bacaan akhir file env non-kritis
+		_ = err
 	}
 }

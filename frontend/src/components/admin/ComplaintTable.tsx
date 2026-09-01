@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import {
   AlertCircle, Check, CheckCircle, ChevronLeft, ChevronRight, Clock,
-  Copy, Eye, FileDown, FileSpreadsheet, FileText, MessageCircle, RefreshCw, Search, Trash2, X,
+  Copy, Eye, FileText, MessageCircle, RefreshCw, Search, Trash2, X,
 } from 'lucide-react';
 import type { AdminItem, AdminStats } from '../../lib/apiAdmin';
-import { adminCleanupStorage, adminListPengaduan } from '../../lib/apiAdmin';
-import { analytics } from '../../lib/analytics';
+import { adminCleanupStorage } from '../../lib/apiAdmin';
 import { CATEGORY_OPTIONS, ITEMS_PER_PAGE, STATUS_OPTIONS, categoryBadge, statusBadge } from './types';
 
 interface ComplaintTableProps {
@@ -48,8 +47,6 @@ export default function ComplaintTable({
   onWhatsAppNotif,
 }: ComplaintTableProps) {
   const [copiedTicket, setCopiedTicket] = useState<string | null>(null);
-  const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false);
-  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isCleaningStorage, setIsCleaningStorage] = useState<boolean>(false);
 
   const handleCleanupStorage = async () => {
@@ -78,70 +75,6 @@ export default function ComplaintTable({
     }
   };
 
-  // Export Excel — Mengambil seluruh data dari Backend Go sesuai filter aktif
-  const handleExportExcel = async () => {
-    setIsExportingExcel(true);
-    try {
-      let exportItems: AdminItem[] = list;
-      try {
-        const res = await adminListPengaduan({
-          page: 1,
-          per_page: 1000,
-          search: searchTerm,
-          category: filterCategory,
-          status: filterStatus,
-        });
-        if (res?.items && res.items.length > 0) {
-          exportItems = res.items;
-        }
-      } catch (err) {
-        console.warn('Fallback to local list for Excel export:', err);
-      }
-
-      const { exportToExcelXlsx } = await import('../../lib/exportUtils');
-      const filterSummary = `Kategori: ${filterCategory === 'ALL' ? 'Semua' : filterCategory} | Status: ${filterStatus === 'ALL' ? 'Semua' : filterStatus}`;
-      exportToExcelXlsx(exportItems, filterSummary);
-      analytics.exportAdminData('xlsx', exportItems.length);
-    } catch (err) {
-      console.error('Export Excel error:', err);
-      alert(`Gagal mengekspor data Excel: ${err instanceof Error ? err.message : 'Terjadi kesalahan'}`);
-    } finally {
-      setIsExportingExcel(false);
-    }
-  };
-
-  // Export PDF — Dokumen Resmi A4 Landscape dengan KOP Kemenag Barito Utara
-  const handleExportPDF = async () => {
-    setIsExportingPdf(true);
-    try {
-      let exportItems: AdminItem[] = list;
-      try {
-        const res = await adminListPengaduan({
-          page: 1,
-          per_page: 1000,
-          search: searchTerm,
-          category: filterCategory,
-          status: filterStatus,
-        });
-        if (res?.items && res.items.length > 0) {
-          exportItems = res.items;
-        }
-      } catch (err) {
-        console.warn('Fallback to local list for PDF export:', err);
-      }
-
-      const { exportToPrintablePdf } = await import('../../lib/exportUtils');
-      const filterSummary = `Kategori: ${filterCategory === 'ALL' ? 'Semua' : filterCategory} | Status: ${filterStatus === 'ALL' ? 'Semua' : filterStatus}`;
-      exportToPrintablePdf(exportItems, filterSummary);
-      analytics.exportAdminData('pdf', exportItems.length);
-    } catch (err) {
-      console.error('Export PDF error:', err);
-      alert(`Gagal mengekspor data PDF: ${err instanceof Error ? err.message : 'Terjadi kesalahan'}`);
-    } finally {
-      setIsExportingPdf(false);
-    }
-  };
-
   const totalCount = stats?.total ?? totalItems;
   const countMenunggu = stats?.by_status?.['Menunggu'] ?? list.filter((i) => i.status === 'Menunggu').length;
   const countDiproses = stats?.by_status?.['Diproses'] ?? list.filter((i) => i.status === 'Diproses').length;
@@ -149,7 +82,7 @@ export default function ComplaintTable({
 
   return (
     <div className="space-y-6">
-      {/* Header & Export Bar */}
+      {/* Header & Quick Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
         <div>
           <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Kelola Pengaduan &amp; Aspirasi</h2>
@@ -174,26 +107,6 @@ export default function ComplaintTable({
           >
             <Trash2 className={`w-3.5 h-3.5 text-slate-500 ${isCleaningStorage ? 'animate-spin' : ''}`} />
             <span>{isCleaningStorage ? 'Membersihkan...' : 'Bersihkan R2'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            disabled={isExportingExcel}
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shadow-sm active:scale-95 disabled:opacity-60"
-            title="Download Rekap Spreadsheet Excel Lengkap"
-          >
-            <FileSpreadsheet className={`w-3.5 h-3.5 ${isExportingExcel ? 'animate-spin' : ''}`} />
-            <span>{isExportingExcel ? 'Mengekspor...' : 'Export Excel'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleExportPDF}
-            disabled={isExportingPdf}
-            className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shadow-sm active:scale-95 disabled:opacity-60"
-            title="Download Dokumen Laporan PDF Resmi"
-          >
-            <FileDown className={`w-3.5 h-3.5 ${isExportingPdf ? 'animate-spin' : ''}`} />
-            <span>{isExportingPdf ? 'Mengekspor...' : 'Export PDF'}</span>
           </button>
         </div>
       </div>

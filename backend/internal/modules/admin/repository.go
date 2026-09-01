@@ -2,67 +2,32 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/validate"
 )
 
-// ErrNotFound menandai pengaduan tidak ditemukan.
-var ErrNotFound = errors.New("record not found")
-
-// ListFilter untuk query daftar pengaduan.
-type ListFilter struct {
-	Status   string
-	Category string
-	Search   string
-	Page     int
-	PerPage  int
-}
-
-// ListResult berisi data + pagination.
-type ListResult struct {
-	Items []Item `json:"items"`
-	Total int    `json:"total"`
-	Page  int    `json:"page"`
-	Pages int    `json:"pages"`
-}
-
-// Item adalah pengaduan untuk tampilan admin.
-type Item struct {
-	ID            string    `json:"id"`
-	TicketNumber  string    `json:"ticket_number"`
-	Category      string    `json:"category"`
-	ServiceUnit   string    `json:"service_unit"`
-	FullName      *string   `json:"full_name,omitempty"`
-	PhoneNumber   string    `json:"phone_number"`
-	Content       string    `json:"content"`
-	IsAnonymous   bool      `json:"is_anonymous"`
-	Status        string    `json:"status"`
-	AdminResponse *string   `json:"admin_response,omitempty"`
-	FileKey       *string   `json:"file_url,omitempty"`
-	Rating        *int16    `json:"rating,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
-
-// Repository mengakses pengaduan untuk panel admin.
+// Repository mengakses database modul admin.
 type Repository struct {
-	pool  *pgxpool.Pool
-	table string
-	log   *slog.Logger
+	pool           *pgxpool.Pool
+	table          string
+	templatesTable string
+	settingsTable  string
+	log            *slog.Logger
 }
 
 // NewRepository membuat Repository admin.
 func NewRepository(pool *pgxpool.Pool, schema string, log *slog.Logger) *Repository {
 	return &Repository{
-		pool:  pool,
-		table: fmt.Sprintf("%q.%q", schema, "pengaduan"),
-		log:   log,
+		pool:           pool,
+		table:          fmt.Sprintf("%q.%q", schema, "pengaduan"),
+		templatesTable: fmt.Sprintf("%q.%q", schema, "templates"),
+		settingsTable:  fmt.Sprintf("%q.%q", schema, "settings"),
+		log:            log,
 	}
 }
 
@@ -97,7 +62,7 @@ func (r *Repository) List(ctx context.Context, f ListFilter) (*ListResult, error
 	rows, err := r.pool.Query(ctx, `
 		SELECT id::text, ticket_number, category, service_unit, full_name,
 			phone_number, content, is_anonymous, status, admin_response,
-			file_url, rating, created_at, updated_at
+			file_url, rating, user_feedback, created_at, updated_at
 		FROM `+r.table+where+`
 		ORDER BY created_at DESC
 		LIMIT $`+fmt.Sprint(len(args)-1)+` OFFSET $`+fmt.Sprint(len(args)),
@@ -108,13 +73,13 @@ func (r *Repository) List(ctx context.Context, f ListFilter) (*ListResult, error
 	}
 	defer rows.Close()
 
-	var items []Item
+	items := make([]Item, 0)
 	for rows.Next() {
 		var it Item
 		if err := rows.Scan(
 			&it.ID, &it.TicketNumber, &it.Category, &it.ServiceUnit, &it.FullName,
 			&it.PhoneNumber, &it.Content, &it.IsAnonymous, &it.Status, &it.AdminResponse,
-			&it.FileKey, &it.Rating, &it.CreatedAt, &it.UpdatedAt,
+			&it.FileKey, &it.Rating, &it.UserFeedback, &it.CreatedAt, &it.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -124,7 +89,6 @@ func (r *Repository) List(ctx context.Context, f ListFilter) (*ListResult, error
 		return nil, err
 	}
 
-	// Total untuk pagination (hitung ulang tanpa limit).
 	var total int
 	countArgs := args[:len(args)-2]
 	countQuery := `SELECT count(*) FROM ` + r.table + where
@@ -142,14 +106,14 @@ func (r *Repository) FindByTicket(ctx context.Context, ticket string) (*Item, er
 	err := r.pool.QueryRow(ctx, `
 		SELECT id::text, ticket_number, category, service_unit, full_name,
 			phone_number, content, is_anonymous, status, admin_response,
-			file_url, rating, created_at, updated_at
+			file_url, rating, user_feedback, created_at, updated_at
 		FROM `+r.table+`
 		WHERE ticket_number = $1`,
 		ticket,
 	).Scan(
 		&it.ID, &it.TicketNumber, &it.Category, &it.ServiceUnit, &it.FullName,
 		&it.PhoneNumber, &it.Content, &it.IsAnonymous, &it.Status, &it.AdminResponse,
-		&it.FileKey, &it.Rating, &it.CreatedAt, &it.UpdatedAt,
+		&it.FileKey, &it.Rating, &it.UserFeedback, &it.CreatedAt, &it.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -172,7 +136,7 @@ func (r *Repository) GetAllFileKeys(ctx context.Context) ([]string, error) {
 	}
 	defer rows.Close()
 
-	var keys []string
+	keys := make([]string, 0)
 	for rows.Next() {
 		var k string
 		if err := rows.Scan(&k); err == nil && k != "" {
@@ -186,7 +150,7 @@ func (r *Repository) GetAllFileKeys(ctx context.Context) ([]string, error) {
 func (r *Repository) UpdateStatusAndResponse(ctx context.Context, ticket, status string, response *string) error {
 	ct, err := r.pool.Exec(ctx, `
 		UPDATE `+r.table+`
-		SET status = $1,
+		SET status = CASE WHEN $1 != '' THEN $1 ELSE status END,
 			admin_response = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE admin_response END
 		WHERE ticket_number = $3`,
 		status, response, ticket,
@@ -216,5 +180,72 @@ func (r *Repository) Delete(ctx context.Context, ticket string) (*string, error)
 	return fileKey, nil
 }
 
-// ValidateStatus memeriksa status yang diizinkan.
-func ValidateStatus(s string) bool { return validate.Status(s) }
+// StatsAggregateResult menampung hasil agregasi statistik dari satu query CTE database.
+type StatsAggregateResult struct {
+	Total      int              `json:"total"`
+	ByStatus   map[string]int   `json:"by_status"`
+	ByCategory map[string]int   `json:"by_category"`
+	Last30Days []map[string]any `json:"last_30_days"`
+	AvgRating  *float64         `json:"avg_rating"`
+}
+
+// GetStats mengumpulkan seluruh metrik statistik pengaduan dalam 1 round-trip query CTE tunggal.
+func (r *Repository) GetStats(ctx context.Context) (*StatsAggregateResult, error) {
+	query := `
+		WITH stats_total AS (
+			SELECT count(*) AS total_count, AVG(rating) AS avg_rating FROM ` + r.table + `
+		),
+		stats_status AS (
+			SELECT json_object_agg(COALESCE(status, 'Lainnya'), cnt) AS by_status
+			FROM (SELECT status, count(*) AS cnt FROM ` + r.table + ` GROUP BY status) s
+		),
+		stats_category AS (
+			SELECT json_object_agg(COALESCE(category, 'Lainnya'), cnt) AS by_category
+			FROM (SELECT category, count(*) AS cnt FROM ` + r.table + ` GROUP BY category) c
+		),
+		stats_days AS (
+			SELECT COALESCE(json_agg(json_build_object('date', day, 'count', cnt) ORDER BY day), '[]'::json) AS last_30_days
+			FROM (
+				SELECT to_char(created_at AT TIME ZONE 'Asia/Makassar', 'YYYY-MM-DD') AS day, count(*) AS cnt
+				FROM ` + r.table + `
+				WHERE created_at > NOW() - INTERVAL '30 days'
+				GROUP BY day
+			) d
+		)
+		SELECT 
+			st.total_count,
+			st.avg_rating,
+			COALESCE(ss.by_status::text, '{}'),
+			COALESCE(sc.by_category::text, '{}'),
+			COALESCE(sd.last_30_days::text, '[]')
+		FROM stats_total st
+		CROSS JOIN stats_status ss
+		CROSS JOIN stats_category sc
+		CROSS JOIN stats_days sd;`
+
+	var total int
+	var avgRating *float64
+	var statusJSON, categoryJSON, daysJSON string
+
+	err := r.pool.QueryRow(ctx, query).Scan(&total, &avgRating, &statusJSON, &categoryJSON, &daysJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	byStatus := make(map[string]int)
+	_ = json.Unmarshal([]byte(statusJSON), &byStatus)
+
+	byCategory := make(map[string]int)
+	_ = json.Unmarshal([]byte(categoryJSON), &byCategory)
+
+	last30Days := make([]map[string]any, 0)
+	_ = json.Unmarshal([]byte(daysJSON), &last30Days)
+
+	return &StatsAggregateResult{
+		Total:      total,
+		ByStatus:   byStatus,
+		ByCategory: byCategory,
+		Last30Days: last30Days,
+		AvgRating:  avgRating,
+	}, nil
+}

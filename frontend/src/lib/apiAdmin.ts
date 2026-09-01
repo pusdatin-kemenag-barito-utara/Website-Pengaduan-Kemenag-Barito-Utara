@@ -2,6 +2,12 @@
 // Sesi admin dikelola cookie HttpOnly "sid"; semua request include credentials.
 
 import type { Layanan } from './api';
+import type {
+  RatingResult,
+  ReportSummaryData,
+  SystemSettings,
+  TemplateItem,
+} from '../components/admin/types';
 
 export interface AdminItem {
   id: string;
@@ -16,6 +22,7 @@ export interface AdminItem {
   admin_response?: string | null;
   file_url?: string | null;
   rating?: number | null;
+  user_feedback?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +45,7 @@ export interface AdminStats {
 
 export interface AdminMe {
   email: string;
+  name?: string;
   role: string;
 }
 
@@ -64,7 +72,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function adminLogin(email: string, password: string): Promise<AdminMe> {
-  const body = await request<{ data: { email: string; role: string } }>('/api/v1/admin/login', {
+  const body = await request<{ data: AdminMe }>('/api/v1/admin/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
@@ -122,7 +130,7 @@ export async function adminCleanupStorage(): Promise<{ deleted_count: number; de
 
 export async function adminListLayanan(): Promise<Layanan[]> {
   const body = await request<{ data: Layanan[] }>('/api/v1/admin/layanan');
-  return body.data;
+  return body.data || [];
 }
 
 export async function adminCreateLayanan(input: { name: string; description?: string; is_active: boolean }): Promise<Layanan> {
@@ -149,4 +157,102 @@ export async function adminReorderLayanan(ids: string[]): Promise<void> {
     method: 'PUT',
     body: JSON.stringify({ ids }),
   });
+}
+
+// ============================================================
+// Ulasan & IKM API
+// ============================================================
+export async function adminListRatings(params: {
+  page?: number;
+  per_page?: number;
+  star?: number;
+  search?: string;
+}): Promise<RatingResult> {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set('page', String(params.page));
+  if (params.per_page) qs.set('per_page', String(params.per_page));
+  if (params.star && params.star > 0) qs.set('star', String(params.star));
+  if (params.search) qs.set('search', params.search);
+  const body = await request<{ data: RatingResult }>(`/api/v1/admin/ratings?${qs.toString()}`);
+  return {
+    items: body.data?.items || [],
+    total: body.data?.total || 0,
+    page: body.data?.page || 1,
+    pages: body.data?.pages || 1,
+    stats: body.data?.stats || {
+      total_rated: 0,
+      avg_rating: 0,
+      ikm_score: 0,
+      ikm_grade: 'Belum Ada Data',
+      distribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
+      per_service_unit: {},
+    },
+  };
+}
+
+// ============================================================
+// Template Tanggapan API
+// ============================================================
+export async function adminListTemplates(): Promise<TemplateItem[]> {
+  const body = await request<{ data: TemplateItem[] }>('/api/v1/admin/templates');
+  return body.data || [];
+}
+
+export async function adminCreateTemplate(input: { title: string; status_target: string; content: string }): Promise<TemplateItem> {
+  const body = await request<{ data: TemplateItem }>('/api/v1/admin/templates', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return body.data;
+}
+
+export async function adminUpdateTemplate(
+  id: string,
+  patch: { title?: string; status_target?: string; content?: string }
+): Promise<TemplateItem> {
+  const body = await request<{ data: TemplateItem }>(`/api/v1/admin/templates/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return body.data;
+}
+
+export async function adminDeleteTemplate(id: string): Promise<void> {
+  await request<{ success: boolean }>(`/api/v1/admin/templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+// ============================================================
+// Pengaturan Sistem API
+// ============================================================
+export async function adminGetSettings(): Promise<SystemSettings> {
+  const body = await request<{ data: SystemSettings }>('/api/v1/admin/settings');
+  return body.data || {};
+}
+
+export async function adminUpdateSettings(settings: SystemSettings): Promise<void> {
+  await request<{ success: boolean }>('/api/v1/admin/settings', {
+    method: 'POST',
+    body: JSON.stringify(settings),
+  });
+}
+
+// ============================================================
+// Rekap Laporan Kedinasan API
+// ============================================================
+export async function adminGetReportSummary(startDate?: string, endDate?: string): Promise<ReportSummaryData> {
+  const qs = new URLSearchParams();
+  if (startDate) qs.set('start_date', startDate);
+  if (endDate) qs.set('end_date', endDate);
+  const body = await request<{ data: ReportSummaryData }>(`/api/v1/admin/reports/summary?${qs.toString()}`);
+  return {
+    start_date: body.data?.start_date || startDate || '',
+    end_date: body.data?.end_date || endDate || '',
+    total: body.data?.total || 0,
+    by_status: body.data?.by_status || {},
+    by_category: body.data?.by_category || {},
+    by_service_unit: body.data?.by_service_unit || {},
+    avg_rating: body.data?.avg_rating,
+    items: body.data?.items || [],
+    generated_at: body.data?.generated_at || new Date().toISOString(),
+  };
 }

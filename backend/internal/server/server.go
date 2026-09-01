@@ -93,6 +93,11 @@ func New(deps Deps) *fiber.App {
 		)
 		layananHandler.RegisterPublic(api)
 
+		adminHandler := admin.NewHandler(
+			admin.NewRepository(deps.DB.Pool, deps.Cfg.AppSchema, deps.Log),
+			storageClient, deps.Log,
+		)
+
 		authSvc := auth.NewService(deps.DB.Pool, deps.Cfg, deps.Log, deps.Cfg.AppSchema)
 		authHandler := auth.NewHandler(authSvc, deps.Cfg, deps.Log)
 		authHandler.Register(api)
@@ -101,10 +106,7 @@ func New(deps Deps) *fiber.App {
 		adminApi := api.Group("/admin", authHandler.RequireAdmin)
 		authHandler.RegisterAdmin(adminApi)
 		layananHandler.RegisterAdmin(adminApi)
-		admin.NewHandler(
-			admin.NewRepository(deps.DB.Pool, deps.Cfg.AppSchema, deps.Log),
-			storageClient, deps.Log,
-		).Register(adminApi)
+		adminHandler.Register(adminApi)
 	}
 
 	// 404 handler untuk route yang tidak terdaftar

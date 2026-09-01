@@ -17,8 +17,8 @@ const {
 } = Astro.props;
 
 const canonicalUrl = canonical || (Astro.url ? Astro.url.href : PUBLIC_SITE_URL);
-const gaId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID || 'G-56V7KYCD71';
-const googleTagId = import.meta.env.PUBLIC_GTAG_ID || 'GT-T5RE5PM8';
+const gaId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID || '';
+const googleTagId = import.meta.env.PUBLIC_GTAG_ID || '';
 const gtmId = import.meta.env.PUBLIC_GTM_ID || '';
 const cfBeaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN || '';
 
@@ -153,7 +153,6 @@ const schemaOrgJsonLd = {
     <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
     <link rel="dns-prefetch" href="https://static.cloudflareinsights.com" />
     <link rel="dns-prefetch" href="https://cloudflareinsights.com" />
-    <link rel="dns-prefetch" href="https://c98eb02b668a13c16b14ebff0ef6a37c.r2.cloudflarestorage.com" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.google-analytics.com" />
 

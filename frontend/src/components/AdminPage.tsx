@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, X } from 'lucide-react';
-import type { Layanan } from '../lib/api';
+import { getAppStatus, type Layanan, type AppStatusResult } from '../lib/api';
 import {
-  adminDeletePengaduan, adminListLayanan, adminListPengaduan,
-  adminLogout, adminMe, adminStats, adminUpdatePengaduan,
+  adminDeletePengaduan,
+  adminListLayanan,
+  adminListPengaduan,
+  adminLogout,
+  adminMe,
+  adminStats,
+  adminUpdatePengaduan,
 } from '../lib/apiAdmin';
 import type { AdminItem, AdminStats, AdminMe } from '../lib/apiAdmin';
 import { analytics } from '../lib/analytics';
@@ -15,10 +20,17 @@ import ComplaintDetailModal from './admin/ComplaintDetailModal';
 import DeleteComplaintModal from './admin/DeleteComplaintModal';
 import LayananManagement from './admin/LayananManagement';
 import StatsView from './admin/StatsView';
+import RatingFeedbackView from './admin/RatingFeedbackView';
+import TemplateManagement from './admin/TemplateManagement';
+import ReportGeneratorView from './admin/ReportGeneratorView';
+import SystemSettingsView from './admin/SystemSettingsView';
 import type { Tab } from './admin/types';
 import { ITEMS_PER_PAGE } from './admin/types';
 
 export default function AdminPage() {
+  // App Status from Pusdatin
+  const [appStatus, setAppStatus] = useState<AppStatusResult | null>(null);
+
   // Auth State
   const [isAuthChecked, setIsAuthChecked] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -146,6 +158,14 @@ export default function AdminPage() {
     };
 
     checkAuth();
+    getAppStatus()
+      .then((st) => {
+        setAppStatus(st);
+        if (st.is_maintenance || st.status === 'maintenance') {
+          window.location.replace('/maintenance');
+        }
+      })
+      .catch(() => setAppStatus(null));
 
     const handleUnauthorized = () => {
       setIsAuthenticated(false);
@@ -210,7 +230,7 @@ export default function AdminPage() {
     const ticketUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/?ticket=${item.ticket_number}`;
     const adminMsg = item.admin_response ? `\n\n*Tanggapan Resmi:*\n${item.admin_response}` : '';
     const message = [
-      `\u{1F3E2} *PEMBERITAHUAN SI-GESIT*`,
+      `*PEMBERITAHUAN SI-GESIT*`,
       `Kementerian Agama Kabupaten Barito Utara`,
       ``,
       `Yth. Pemohon / Pelapor,`,
@@ -219,7 +239,7 @@ export default function AdminPage() {
       ``,
       `Pantau progres tiket Anda: ${ticketUrl}`,
       ``,
-      `_SI-GESIT \u2022 Tim Pengaduan Kemenag Barito Utara_`,
+      `_SI-GESIT - Tim Pengaduan Kemenag Barito Utara_`,
     ].join('\n');
     const phone = item.phone_number?.replace(/^0/, '62').replace(/\D/g, '');
     window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
@@ -298,6 +318,21 @@ export default function AdminPage() {
           onLogout={handleLogout}
         />
 
+        {/* Pusdatin Maintenance Info Banner */}
+        {appStatus?.is_maintenance && (
+          <div className="mx-4 sm:mx-8 mt-4 sm:mt-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between gap-3 text-xs font-semibold shadow-xs animate-in fade-in duration-300">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-2.5 w-2.5 relative shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+              </span>
+              <span>
+                <strong>Mode Pemeliharaan Pusdatin Aktif:</strong> Status aplikasi SI-GESIT saat ini sedang <em>MAINTENANCE</em> di Dashboard Pusdatin. Halaman publik masyarakat menampilkan informasi pemeliharaan, sementara Anda tetap dapat mengelola tiket dan data di panel admin ini.
+              </span>
+            </div>
+          </div>
+        )}
+
         <main className="p-4 sm:p-8 space-y-8 flex-1">
           {activeTab === 'pengaduan' && (
             <ComplaintTable
@@ -321,6 +356,12 @@ export default function AdminPage() {
             />
           )}
 
+          {activeTab === 'rating' && <RatingFeedbackView />}
+
+          {activeTab === 'statistik' && (
+            <StatsView stats={stats} onRefreshStats={fetchStats} />
+          )}
+
           {activeTab === 'layanan' && (
             <LayananManagement
               layananList={layananList}
@@ -330,9 +371,11 @@ export default function AdminPage() {
             />
           )}
 
-          {activeTab === 'statistik' && (
-            <StatsView stats={stats} onRefreshStats={fetchStats} />
-          )}
+          {activeTab === 'template' && <TemplateManagement />}
+
+          {activeTab === 'laporan' && <ReportGeneratorView />}
+
+          {activeTab === 'settings' && <SystemSettingsView />}
         </main>
       </div>
 

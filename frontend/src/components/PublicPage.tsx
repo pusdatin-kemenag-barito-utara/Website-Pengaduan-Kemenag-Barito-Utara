@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getLayananList, checkTicketStatus } from '../lib/api';
+import { getLayananList, checkTicketStatus, getAppStatus } from '../lib/api';
 import type { Layanan, TrackResult } from '../lib/api';
 import { generateTicketPng } from '../lib/ticketCanvas';
 import Header from './public/Header';
@@ -37,6 +37,21 @@ export default function PublicPage() {
   const ticketRef = useRef<HTMLDivElement>(null);
   const qrFormRef = useRef<HTMLDivElement>(null);
   const qrSearchRef = useRef<HTMLDivElement>(null);
+
+  // 0. Auto-redirect to /maintenance if system is in maintenance mode
+  useEffect(() => {
+    let active = true;
+    getAppStatus()
+      .then((status) => {
+        if (active && (status.is_maintenance || status.status === 'maintenance')) {
+          window.location.replace('/maintenance');
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // 1. Load Dynamic Services 100% from Database/Admin
   useEffect(() => {

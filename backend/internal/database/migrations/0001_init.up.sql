@@ -32,10 +32,18 @@ ALTER TABLE "kemenag-pengaduan".pengaduan ADD COLUMN IF NOT EXISTS rating SMALLI
 ALTER TABLE "kemenag-pengaduan".pengaduan ADD COLUMN IF NOT EXISTS user_feedback TEXT;
 ALTER TABLE "kemenag-pengaduan".pengaduan ADD COLUMN IF NOT EXISTS admin_response TEXT;
 
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE INDEX IF NOT EXISTS idx_pengaduan_ticket      ON "kemenag-pengaduan".pengaduan (ticket_number);
 CREATE INDEX IF NOT EXISTS idx_pengaduan_category    ON "kemenag-pengaduan".pengaduan (category);
 CREATE INDEX IF NOT EXISTS idx_pengaduan_status      ON "kemenag-pengaduan".pengaduan (status);
-CREATE INDEX IF NOT EXISTS idx_pengaduan_created_at  ON "kemenag-pengaduan".pengaduan (created_at DESC);-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_pengaduan_created_at  ON "kemenag-pengaduan".pengaduan (created_at DESC);
+
+-- GIN Trigram Indexes untuk pencarian teks cepat
+CREATE INDEX IF NOT EXISTS idx_pengaduan_ticket_trgm ON "kemenag-pengaduan".pengaduan USING gin (ticket_number gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_pengaduan_name_trgm   ON "kemenag-pengaduan".pengaduan USING gin (full_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_pengaduan_phone_trgm  ON "kemenag-pengaduan".pengaduan USING gin (phone_number gin_trgm_ops);
+
 -- Tabel: layanan (unit layanan dinamis)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS "kemenag-pengaduan".layanan (

@@ -61,9 +61,9 @@ backend dan frontend:
 | `PORT`, `HOST`               | Backend   | Port HTTP (default 8080)                     |
 | `DATABASE_URL`               | Backend   | Pooler Supavisor (`:6543`), schema `kemenag-pengaduan` |
 | `DB_SCHEMA`                  | Backend   | Schema aplikasi (default `kemenag-pengaduan`)|
-| `PUSDATIN_SCHEMA`            | Backend   | Schema pusdatin untuk profil admin           |
-| `SUPABASE_URL`               | Backend   | Base URL Supabase (GoTrue + REST)            |
-| `SUPABASE_ANON_KEY`          | Backend   | Anon key Supabase                            |
+| `ADMIN_EMAIL`                | Backend   | Email/Username Super Admin (default baritoutara@kemenag.go.id) |
+| `ADMIN_PASSWORD`             | Backend   | Kata sandi Super Admin                       |
+| `ADMIN_NAME`                 | Backend   | Nama tampilan Super Admin                    |
 | `SESSION_SECRET`             | Backend   | Rahasia penandatangan hash sesi admin        |
 | `SESSION_TTL_HOURS`          | Backend   | Umur sesi admin (default 24)                 |
 | `COOKIE_SECURE`              | Backend   | `true` di produksi (HTTPS)                   |

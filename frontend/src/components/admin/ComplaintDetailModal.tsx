@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react';
 import {
-  Check, CheckCircle, Copy, ExternalLink, FileText, MessageCircle, Sparkles, X,
+  Check,
+  CheckCircle,
+  Copy,
+  ExternalLink,
+  FileText,
+  MessageCircle,
+  Sparkles,
+  X,
 } from 'lucide-react';
+import { adminListTemplates } from '../../lib/apiAdmin';
 import type { AdminItem } from '../../lib/apiAdmin';
+import type { TemplateItem } from './types';
 import { STATUS_OPTIONS, categoryBadge, statusBadge } from './types';
 
 interface ComplaintDetailModalProps {
@@ -12,21 +21,33 @@ interface ComplaintDetailModalProps {
   onWhatsAppNotif: (item: AdminItem) => void;
 }
 
-const RESPONSE_TEMPLATES = [
+const DEFAULT_TEMPLATES = [
   {
-    label: 'Sedang Diproses',
-    status: 'Diproses',
-    text: 'Pengaduan / aspirasi Anda telah kami terima dan saat ini sedang ditindaklanjuti oleh seksi / unit terkait di lingkungan Kementerian Agama Barito Utara. Terima kasih atas laporannya.',
+    id: '1',
+    title: 'Sedang Ditindaklanjuti',
+    status_target: 'Diproses',
+    content:
+      'Pengaduan / aspirasi Anda telah kami terima dan saat ini sedang ditindaklanjuti oleh seksi / unit terkait di lingkungan Kementerian Agama Barito Utara. Terima kasih atas laporannya.',
+    created_at: '',
+    updated_at: '',
   },
   {
-    label: 'Telah Selesai',
-    status: 'Selesai',
-    text: 'Pengaduan / aspirasi Anda telah selesai ditindaklanjuti oleh petugas kami. Terima kasih atas partisipasi aktif Anda dalam meningkatkan kualitas pelayanan publik Kemenag Barito Utara.',
+    id: '2',
+    title: 'Penyelesaian Pelayanan',
+    status_target: 'Selesai',
+    content:
+      'Pengaduan / aspirasi Anda telah selesai ditindaklanjuti oleh petugas kami. Terima kasih atas partisipasi aktif Anda dalam meningkatkan kualitas pelayanan publik Kemenag Barito Utara.',
+    created_at: '',
+    updated_at: '',
   },
   {
-    label: 'Perlu Bukti Tambahan',
-    status: 'Diproses',
-    text: 'Laporan Anda sedang kami telaah. Mohon kirimkan data atau dokumen pendukung tambahan melalui nomor WhatsApp resmi pelayanan agar penanganan dapat dilakukan secara maksimal.',
+    id: '3',
+    title: 'Permintaan Dokumen Tambahan',
+    status_target: 'Diproses',
+    content:
+      'Laporan Anda sedang kami telaah. Mohon kirimkan data atau dokumen pendukung tambahan melalui nomor WhatsApp resmi pelayanan agar penanganan dapat dilakukan secara maksimal.',
+    created_at: '',
+    updated_at: '',
   },
 ];
 
@@ -41,6 +62,20 @@ export default function ComplaintDetailModal({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [isTicketCopied, setIsTicketCopied] = useState<boolean>(false);
+  const [templates, setTemplates] = useState<TemplateItem[]>(DEFAULT_TEMPLATES);
+
+  // Load custom templates from database
+  useEffect(() => {
+    adminListTemplates()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setTemplates(data);
+        }
+      })
+      .catch(() => {
+        /* gunakan fallback default */
+      });
+  }, []);
 
   // Synchronize state whenever a new selectedItem is passed
   useEffect(() => {
@@ -78,9 +113,15 @@ export default function ComplaintDetailModal({
     }
   };
 
-  const applyTemplate = (tpl: typeof RESPONSE_TEMPLATES[0]) => {
-    setNewStatus(tpl.status);
-    setAdminResponseText(tpl.text);
+  const applyTemplate = (tpl: TemplateItem) => {
+    setNewStatus(tpl.status_target);
+    // Replace dynamic variable tags if present
+    const rendered = tpl.content
+      .replace(/\{\{nomor_tiket\}\}/gi, selectedItem.ticket_number)
+      .replace(/\{\{nama_pemohon\}\}/gi, selectedItem.full_name || 'Bapak/Ibu')
+      .replace(/\{\{unit_layanan\}\}/gi, selectedItem.service_unit)
+      .replace(/\{\{status\}\}/gi, tpl.status_target);
+    setAdminResponseText(rendered);
   };
 
   return (
@@ -99,103 +140,77 @@ export default function ComplaintDetailModal({
                 <button
                   type="button"
                   onClick={handleCopyTicket}
-                  className="p-1 rounded-md text-slate-400 hover:text-emerald-400 hover:bg-white/10 transition-all cursor-pointer inline-flex items-center gap-1 active:scale-95"
-                  title="Salin Nomor Tiket"
-                  aria-label="Salin Nomor Tiket"
+                  className="text-emerald-400 hover:text-emerald-300 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   {isTicketCopied ? (
                     <>
-                      <Check className="w-3 h-3 text-emerald-400 animate-in zoom-in-50" />
-                      <span className="text-[10px] font-bold text-emerald-400">Tersalin!</span>
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span className="text-emerald-400">Tersalin</span>
                     </>
                   ) : (
-                    <Copy className="w-3 h-3" />
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span>Salin</span>
+                    </>
                   )}
                 </button>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className={`px-3 py-1 rounded-full text-xs font-black border ${statusBadge(selectedItem.status)}`}>
-              {selectedItem.status}
-            </span>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 flex-1 min-h-0 overflow-hidden">
-          {/* Left Column: Complainant Metadata */}
-          <div className="lg:col-span-2 p-5 sm:p-7 border-b lg:border-b-0 lg:border-r border-slate-200/80 bg-slate-50/60 overflow-y-auto flex flex-col gap-4">
-            <div>
-              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2.5">
-                Informasi Pelapor
-              </p>
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Kategori</p>
-                  <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-black border ${categoryBadge(selectedItem.category)}`}>
-                    {selectedItem.category}
-                  </span>
+        {/* Modal Body: 2 Columns Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 flex-1 min-h-0 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 overflow-hidden">
+          {/* Left Column: Metadata & Complainant Details */}
+          <div className="lg:col-span-2 p-5 sm:p-7 bg-slate-50/70 overflow-y-auto space-y-4 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`px-2.5 py-1 rounded-xl text-xs font-black uppercase tracking-wider border ${statusBadge(selectedItem.status)}`}>
+                  {selectedItem.status}
+                </span>
+                <span className={`px-2.5 py-1 rounded-xl text-xs font-bold border ${categoryBadge(selectedItem.category)}`}>
+                  {selectedItem.category}
+                </span>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Unit / Seksi Dituju</p>
+                  <p className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{selectedItem.service_unit}</p>
                 </div>
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Tgl Pengajuan</p>
-                  <p className="text-xs font-bold text-slate-900">
-                    {selectedItem.created_at
-                      ? new Date(selectedItem.created_at).toLocaleString('id-ID', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : '-'}
+
+                <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Identitas Pelapor</p>
+                  <p className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">
+                    {selectedItem.is_anonymous ? 'Masyarakat (Anonim)' : selectedItem.full_name || 'Tidak dicantumkan'}
                   </p>
                 </div>
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Nama Pemohon</p>
-                  <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                    {selectedItem.is_anonymous ? <span className="text-slate-400 italic">Anonim</span> : selectedItem.full_name || '-'}
-                  </p>
+
+                <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Nomor WhatsApp Pelapor</p>
+                  <p className="text-xs sm:text-sm font-mono font-bold text-slate-800 mt-0.5">{selectedItem.phone_number}</p>
                 </div>
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">No Handphone</p>
-                  <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                    {selectedItem.phone_number}
+
+                <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Tanggal Masuk</p>
+                  <p className="text-xs font-bold text-slate-700 mt-0.5">
+                    {new Date(selectedItem.created_at).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}
                   </p>
-                </div>
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-3 col-span-2 shadow-xs">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Unit Layanan</p>
-                  <p className="text-xs sm:text-sm font-bold text-slate-900">{selectedItem.service_unit}</p>
                 </div>
               </div>
             </div>
 
-            {/* Rating if present */}
-            {selectedItem.rating ? (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 shadow-xs">
-                <p className="text-[10px] text-amber-700 font-black uppercase tracking-wider mb-1">
-                  Penilaian Kepuasan Masyarakat
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-black text-amber-600 tracking-wider">
-                    {'\u2605'.repeat(selectedItem.rating)}
-                    {'\u2606'.repeat(5 - selectedItem.rating)}
-                  </span>
-                  <span className="text-xs font-black text-amber-800">({selectedItem.rating} dari 5 Bintang)</span>
-                </div>
-              </div>
-            ) : null}
-
-            {/* Attachment Link */}
+            {/* Attachment File Card */}
             {selectedItem.file_url && (
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span className="text-xs font-bold text-slate-800 truncate">Lampiran Dokumen</span>
@@ -300,23 +315,23 @@ export default function ComplaintDetailModal({
               </select>
             </div>
 
-            {/* Quick Templates */}
+            {/* Quick Templates with Database Presets */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  <span>Template Tanggapan Cepat</span>
+                  <span>Template Tanggapan Cepat (Klik untuk Otomatis Isi)</span>
                 </label>
               </div>
               <div className="flex flex-wrap gap-2">
-                {RESPONSE_TEMPLATES.map((tpl) => (
+                {templates.map((tpl) => (
                   <button
-                    key={tpl.label}
+                    key={tpl.id || tpl.title}
                     type="button"
                     onClick={() => applyTemplate(tpl)}
                     className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-200 border border-slate-200 text-[11px] font-bold text-slate-600 transition-all cursor-pointer active:scale-95"
                   >
-                    + {tpl.label}
+                    + {tpl.title}
                   </button>
                 ))}
               </div>

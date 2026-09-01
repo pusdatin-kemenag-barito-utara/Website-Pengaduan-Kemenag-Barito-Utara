@@ -19,8 +19,8 @@ declare global {
   }
 }
 
-export const GA_MEASUREMENT_ID = import.meta.env.PUBLIC_GA_MEASUREMENT_ID || 'G-56V7KYCD71';
-export const GTAG_ID = import.meta.env.PUBLIC_GTAG_ID || 'GT-T5RE5PM8';
+export const GA_MEASUREMENT_ID = import.meta.env.PUBLIC_GA_MEASUREMENT_ID || '';
+export const GTAG_ID = import.meta.env.PUBLIC_GTAG_ID || '';
 export const GTM_ID = import.meta.env.PUBLIC_GTM_ID || '';
 export const CF_BEACON_TOKEN = import.meta.env.PUBLIC_CF_BEACON_TOKEN || '';
 

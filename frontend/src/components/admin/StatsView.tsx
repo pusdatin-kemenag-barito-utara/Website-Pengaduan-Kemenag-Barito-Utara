@@ -1,5 +1,12 @@
 import {
-  AlertCircle, BarChart3, CheckCircle, Clock, FileText, RefreshCw, Star, TrendingUp,
+  AlertCircle,
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Percent,
+  RefreshCw,
+  TrendingUp,
 } from 'lucide-react';
 import type { AdminStats } from '../../lib/apiAdmin';
 import { CATEGORY_OPTIONS, STATUS_OPTIONS } from './types';
@@ -29,16 +36,20 @@ export default function StatsView({ stats, onRefreshStats }: StatsViewProps) {
   const categoryCounts = CATEGORY_OPTIONS.map((k) => ({ label: k, count: stats?.by_category?.[k] || 0 }));
   const statusCounts = STATUS_OPTIONS.map((k) => ({ label: k, count: stats?.by_status?.[k] || 0 }));
   const maxCat = Math.max(...categoryCounts.map((c) => c.count), 1);
-  const avgRating = stats?.avg_rating ?? null;
   const totalDonut = statusCounts.reduce((s, c) => s + c.count, 0) || 1;
   let donutOffset = 0;
   const maxDay = Math.max(...(stats?.last_30_days || []).map((d) => d.count), 1);
+
+  const totalPengaduan = stats?.total ?? 0;
+  const selesaiCount = statusCounts.find((s) => s.label === 'Selesai')?.count || 0;
+  const aktifCount = (statusCounts.find((s) => s.label === 'Menunggu')?.count || 0) + (statusCounts.find((s) => s.label === 'Diproses')?.count || 0);
+  const completionRate = totalPengaduan > 0 ? ((selesaiCount / totalPengaduan) * 100).toFixed(1) : '0.0';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900">Statistik Pengaduan</h2>
+          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Statistik &amp; Analitik Pengaduan</h2>
           <p className="text-xs sm:text-sm text-slate-500 font-medium">Ringkasan analitik data pengaduan &amp; aspirasi SI-GESIT secara real-time.</p>
         </div>
         <button
@@ -55,7 +66,7 @@ export default function StatsView({ stats, onRefreshStats }: StatsViewProps) {
           { label: 'Total Tiket', val: stats?.total ?? 0, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', icon: <FileText className="w-5 h-5 text-emerald-600" /> },
           { label: 'Menunggu', val: statusCounts[0].count, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100', icon: <Clock className="w-5 h-5 text-amber-500" /> },
           { label: 'Diproses', val: statusCounts[1].count, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', icon: <RefreshCw className="w-5 h-5 text-blue-600" /> },
-          { label: 'Selesai', val: statusCounts[2].count, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', icon: <CheckCircle className="w-5 h-5 text-emerald-600" /> },
+          { label: 'Selesai', val: statusCounts[2].count, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', icon: <CheckCircle2 className="w-5 h-5 text-emerald-600" /> },
           { label: 'Ditolak', val: statusCounts[3].count, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100', icon: <AlertCircle className="w-5 h-5 text-rose-600" /> },
         ].map((card) => (
           <div key={card.label} className="bg-white rounded-3xl border border-slate-200 p-5 flex items-center justify-between shadow-sm">
@@ -163,30 +174,35 @@ export default function StatsView({ stats, onRefreshStats }: StatsViewProps) {
           )}
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-5">
-            <Star className="w-4 h-4 text-amber-500" />
-            <h3 className="font-black text-slate-900 text-sm">Penilaian Layanan</h3>
-          </div>
-          <div className="flex items-center gap-6 mb-5">
-            <div className="text-center">
-              <p className="text-5xl font-black text-amber-500">{avgRating ?? '-'}</p>
-              <p className="text-[11px] text-slate-500 font-bold mt-1">Rata-rata Rating</p>
+        {/* Efisiensi & Tingkat Penyelesaian */}
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Percent className="w-4 h-4 text-emerald-600" />
+              <h3 className="font-black text-slate-900 text-sm">Tingkat Penyelesaian Layanan</h3>
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-1 justify-center">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star
-                    key={star}
-                    className={`w-6 h-6 ${avgRating && avgRating >= star ? 'text-amber-500 fill-amber-500' : 'text-slate-200'}`}
-                  />
-                ))}
+            <div className="flex items-center gap-6 my-2">
+              <div className="text-center">
+                <p className="text-4xl sm:text-5xl font-black text-emerald-600">{completionRate}%</p>
+                <p className="text-[11px] text-slate-500 font-bold mt-1">Rasio Selesai</p>
               </div>
-              <p className="text-center text-[11px] text-slate-400 font-bold mt-1.5">
-                Dari laporan yang telah selesai ditindaklanjuti
-              </p>
+              <div className="flex-1 space-y-2.5">
+                <div className="flex justify-between text-xs font-bold text-slate-700">
+                  <span>Tiket Selesai: {selesaiCount}</span>
+                  <span>Dalam Proses: {aktifCount}</span>
+                </div>
+                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-3 bg-emerald-500 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min(parseFloat(completionRate), 100)}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
+          <p className="text-[11px] text-slate-400 font-medium pt-3 border-t border-slate-100">
+            Dihitung dari perbandingan pengaduan berstatus Selesai terhadap total keseluruhan tiket yang masuk.
+          </p>
         </div>
       </div>
     </div>

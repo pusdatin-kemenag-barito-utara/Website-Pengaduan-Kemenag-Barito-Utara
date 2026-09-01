@@ -25,11 +25,10 @@ Browser (Masyarakat / Admin)
 └──────┬──────────────┬───────┘
        │              │
        ▼              ▼
-  PostgreSQL      Cloudflare R2
-  (pgx v5)        (lampiran file)
-  schema:
-  kemenag-pengaduan (tabel app)
-  pusdatin (baca: profiles admin)
+   PostgreSQL      Cloudflare R2
+   (pgx v5)        (lampiran file)
+   schema:
+   kemenag-pengaduan (tabel pengaduan, layanan, sessions, login_attempts)
 ```
 
 ## Keputusan Desain
@@ -45,11 +44,11 @@ Browser (Masyarakat / Admin)
   dipakai; otorisasi sepenuhnya di layer service Go.
 - **Storage**: hanya Cloudflare R2. Upload dilakukan setelah row tersimpan
   (rollback jika gagal); penghapusan tiket ikut menghapus file.
-- **Auth**: session token acak (hash di tabel `sessions`), cookie
-  HttpOnly+Secure. Kredensial admin diverifikasi terhadap tabel `profiles`
-  di schema `pusdatin` (database Supabase yang sama).
+- **Auth**: session token acak (hash SHA-256 di tabel `sessions`), cookie
+  HttpOnly+Secure. Autentikasi mandiri untuk 1 user sistem (`super_admin`)
+  yang dikonfigurasi via environment variable tanpa ketergantungan Pusdatin/GoTrue.
 - **Rate limit**: in-memory sliding window per IP untuk submit (3/5 mnt),
-  lacak (10/mnt), login (5/15 mnt lockout).
+  lacak (10/mnt), login (5/15 mnt lockout dicatat di tabel lokal `login_attempts`).
 
 ## Endpoint API (v1)
 
@@ -80,7 +79,7 @@ GET    /api/v1/health                     health check
 2. **Lacak tiket**: rate limit per IP → query by ticket → jika file di R2,
    buat presigned URL (1 jam) → kembalikan data + URL.
 3. **Admin**: semua `/api/v1/admin/*` melewati middleware sesi. Login
-   memverifikasi email+role dari schema `pusdatin`, lalu membuat session.
+   memverifikasi kredensial super_admin mandiri, lalu membuat session.
 4. **Kelola layanan**: reorder dieksekusi dalam satu transaksi SQL.
 
 ## Migrasi Database

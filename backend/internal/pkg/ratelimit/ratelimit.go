@@ -1,5 +1,5 @@
 // Package ratelimit menyediakan rate limiter in-memory (sliding window)
-// per key (mis. IP atau nomor telepon).
+// per key (mis. IP atau nomor telepon) dengan pembersihan memori otomatis.
 package ratelimit
 
 import (
@@ -9,18 +9,62 @@ import (
 
 // Limiter membatasi jumlah kejadian per jendela waktu untuk tiap key.
 type Limiter struct {
-	mu      sync.Mutex
-	entries map[string][]time.Time
-	max     int
-	window  time.Duration
+	mu       sync.Mutex
+	entries  map[string][]time.Time
+	max      int
+	window   time.Duration
+	stopChan chan struct{}
 }
 
-// New membuat Limiter dengan batas max kejadian per window.
+// New membuat Limiter dengan batas max kejadian per window dan pembersih memori otomatis.
 func New(max int, window time.Duration) *Limiter {
-	return &Limiter{
-		entries: make(map[string][]time.Time),
-		max:     max,
-		window:  window,
+	l := &Limiter{
+		entries:  make(map[string][]time.Time),
+		max:      max,
+		window:   window,
+		stopChan: make(chan struct{}),
+	}
+
+	// Background worker untuk membersihkan IP kadaluwarsa secara berkala (mencegah memory leak)
+	go l.startCleanupLoop(5 * time.Minute)
+
+	return l
+}
+
+func (l *Limiter) startCleanupLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			l.mu.Lock()
+			cutoff := time.Now().Add(-l.window)
+			for key, ts := range l.entries {
+				hasActive := false
+				for _, t := range ts {
+					if t.After(cutoff) {
+						hasActive = true
+						break
+					}
+				}
+				if !hasActive {
+					delete(l.entries, key)
+				}
+			}
+			l.mu.Unlock()
+		case <-l.stopChan:
+			return
+		}
+	}
+}
+
+// Close menghentikan background cleanup loop bila diperlukan.
+func (l *Limiter) Close() {
+	select {
+	case <-l.stopChan:
+	default:
+		close(l.stopChan)
 	}
 }
 

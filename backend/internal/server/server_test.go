@@ -20,7 +20,9 @@ func testCfg() *config.Config {
 	return &config.Config{
 		SessionSecret:   "test-secret",
 		AppSchema:       "kemenag-pengaduan",
-		PusdatinSchema:  "kemenag_pusdatin",
+		AdminEmail:      "baritoutara@kemenag.go.id",
+		AdminPassword:   "@Kemenag_126",
+		AdminName:       "Super Admin Kemenag Barito Utara",
 		CookieSecure:    false,
 		SessionTTLHours: 24,
 	}

@@ -21,7 +21,7 @@ export const CATEGORIES: CategoryOption[] = [
 ];
 
 export const TURNSTILE_SITE_KEY =
-  import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAADR1O_LSp1lgc3km';
+  import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 
 export interface SubmittedDetails extends TicketDetails {
   subject?: string;

@@ -103,6 +103,40 @@ function colorizeDuration(ms: number): string {
   return `${color}(${formatted})${ANSI_RESET}`;
 }
 
+let cachedMaintenance: { isMaintenance: boolean; timestamp: number } = {
+  isMaintenance: false,
+  timestamp: 0,
+};
+
+async function getMaintenanceStatus(backendURL: string): Promise<boolean> {
+  const now = Date.now();
+  if (now - cachedMaintenance.timestamp < 5000) {
+    return cachedMaintenance.isMaintenance;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 600);
+
+    const res = await fetch(`${backendURL}/api/v1/app-status`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = (await res.json()) as { is_maintenance?: boolean; status?: string };
+      const isMaint = data.is_maintenance === true || data.status === 'maintenance';
+      cachedMaintenance = { isMaintenance: isMaint, timestamp: now };
+      return isMaint;
+    }
+  } catch {
+    // If backend is slow/restarting, retain cached state
+  }
+
+  return cachedMaintenance.isMaintenance;
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
   const pathname = context.url.pathname;
 
@@ -135,6 +169,20 @@ export const onRequest = defineMiddleware(async (context, next) => {
     pathname.endsWith('.webp') ||
     pathname.endsWith('.css') ||
     pathname.endsWith('.js');
+
+  // Enforce Server-Side Maintenance Mode Redirect & Anti-Bypass (Full Lockdown)
+  if (!isInternalAsset) {
+    const isMaintenance = await getMaintenanceStatus(backendURL);
+    const isExcluded = pathname === '/maintenance';
+
+    if (isMaintenance && !isExcluded) {
+      return context.redirect('/maintenance', 307);
+    }
+
+    if (!isMaintenance && pathname === '/maintenance') {
+      return context.redirect('/', 307);
+    }
+  }
 
   const start = performance.now();
   let response: Response;
@@ -204,8 +252,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
       "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://www.googletagmanager.com https://www.google-analytics.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://c98eb02b668a13c16b14ebff0ef6a37c.r2.cloudflarestorage.com https://*.r2.cloudflarestorage.com https://www.google-analytics.com https://www.googletagmanager.com",
-      "connect-src 'self' https://db.kemenag-baritoutara.com https://challenges.cloudflare.com https://cloudflareinsights.com https://*.cloudflareinsights.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://*.r2.cloudflarestorage.com",
+      "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com https://www.google-analytics.com https://www.googletagmanager.com",
+      "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com https://*.cloudflareinsights.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://*.r2.cloudflarestorage.com",
       "frame-src https://challenges.cloudflare.com https://www.googletagmanager.com",
       "object-src 'none'",
       "base-uri 'self'",

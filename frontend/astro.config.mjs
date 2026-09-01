@@ -12,10 +12,13 @@ export default defineConfig({
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],
+    resolve: {
+      dedupe: ['react', 'react-dom'],
+    },
     // Baca .env.local dari root monorepo (satu env untuk FE + BE)
     envDir: '../',
     optimizeDeps: {
-      include: ['xlsx', 'jspdf', 'jspdf-autotable'],
+      include: ['react', 'react-dom', 'react/jsx-runtime', 'xlsx', 'jspdf', 'jspdf-autotable'],
     },
     server: {
       proxy: {
