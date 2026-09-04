@@ -252,10 +252,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
       "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://www.googletagmanager.com https://www.google-analytics.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com https://www.google-analytics.com https://www.googletagmanager.com",
-      "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com https://*.cloudflareinsights.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://*.r2.cloudflarestorage.com",
-      "frame-src https://challenges.cloudflare.com https://www.googletagmanager.com",
-      "object-src 'none'",
+      "img-src 'self' data: blob: https://files.kemenag-baritoutara.com https://*.r2.cloudflarestorage.com https://www.google-analytics.com https://www.googletagmanager.com",
+      "connect-src 'self' https://files.kemenag-baritoutara.com https://challenges.cloudflare.com https://cloudflareinsights.com https://*.cloudflareinsights.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://*.r2.cloudflarestorage.com",
+      "frame-src 'self' data: blob: https://files.kemenag-baritoutara.com https://challenges.cloudflare.com https://www.googletagmanager.com",
+      "object-src 'self' blob: https://files.kemenag-baritoutara.com",
       "base-uri 'self'",
     ].join('; ')
   );

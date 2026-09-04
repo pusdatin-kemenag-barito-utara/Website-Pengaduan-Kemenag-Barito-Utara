@@ -7,6 +7,7 @@ export interface Layanan {
   description?: string | null;
   icon?: string | null;
   sort_order?: number;
+  order_index?: number;
   is_active: boolean;
   created_at?: string;
 }
@@ -56,7 +57,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function getLayananList(): Promise<Layanan[]> {
-  const body = await request<{ data: Layanan[] }>('/api/v1/layanan');
+  const body = await request<{ data: Layanan[] }>('/api/v1/layanan', {
+    cache: 'no-store',
+  });
   return body.data || [];
 }
 

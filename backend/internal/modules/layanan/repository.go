@@ -40,17 +40,20 @@ func NewRepository(pool *pgxpool.Pool, schema string, log *slog.Logger) *Reposit
 	}
 }
 
-// ListActive mengambil layanan aktif terurut.
+// ListActive mengambil layanan aktif terurut secara dinamis dari database.
 func (r *Repository) ListActive(ctx context.Context) ([]Layanan, error) {
+	if r.pool == nil {
+		return []Layanan{}, fmt.Errorf("database connection pool nil")
+	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, name, description, is_active, order_index
-		FROM `+r.table+` WHERE is_active = TRUE ORDER BY order_index, name`)
+		FROM `+r.table+` WHERE is_active = TRUE ORDER BY order_index ASC, name ASC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var out []Layanan
+	out := make([]Layanan, 0)
 	for rows.Next() {
 		var l Layanan
 		if err := rows.Scan(&l.ID, &l.Name, &l.Description, &l.IsActive, &l.OrderIndex); err != nil {
@@ -100,6 +103,15 @@ func (r *Repository) FindByID(ctx context.Context, id uuid.UUID) (*Layanan, erro
 
 // Create menyisipkan layanan baru.
 func (r *Repository) Create(ctx context.Context, l *Layanan) error {
+	if l.OrderIndex <= 0 {
+		var nextIndex int
+		row := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(order_index), 0) + 1 FROM `+r.table)
+		if err := row.Scan(&nextIndex); err == nil && nextIndex > 0 {
+			l.OrderIndex = nextIndex
+		} else {
+			l.OrderIndex = 1
+		}
+	}
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO `+r.table+` (name, description, is_active, order_index)
 		VALUES ($1, $2, $3, $4) RETURNING id`,

@@ -79,6 +79,7 @@ func New(deps Deps) *fiber.App {
 		storageClient := storage.NewR2(
 			deps.Cfg.R2AccessKeyID, deps.Cfg.R2SecretAccessKey,
 			deps.Cfg.R2EndpointURL, deps.Cfg.R2BucketPengaduan,
+			deps.Cfg.R2PublicURL,
 		)
 		turnstileVerifier := turnstile.New(deps.Cfg.TurnstileSecretKey)
 

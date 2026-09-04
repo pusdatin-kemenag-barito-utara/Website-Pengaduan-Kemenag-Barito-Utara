@@ -129,7 +129,9 @@ export async function adminCleanupStorage(): Promise<{ deleted_count: number; de
 }
 
 export async function adminListLayanan(): Promise<Layanan[]> {
-  const body = await request<{ data: Layanan[] }>('/api/v1/admin/layanan');
+  const body = await request<{ data: Layanan[] }>('/api/v1/admin/layanan', {
+    cache: 'no-store',
+  });
   return body.data || [];
 }
 

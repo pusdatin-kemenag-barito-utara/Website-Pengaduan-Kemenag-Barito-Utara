@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -18,16 +19,17 @@ import (
 
 // Client membungkus S3 client untuk bucket R2.
 type Client struct {
-	s3       *s3.Client
-	bucket   string
-	endpoint string
-	enabled  bool
+	s3        *s3.Client
+	bucket    string
+	endpoint  string
+	publicURL string
+	enabled   bool
 }
 
 // NewR2 membuat Client R2. Jika kredensial kosong, klien tetap dibuat
 // namun operasi upload/delete/presign mengembalikan error (fail-closed).
-func NewR2(accessKeyID, secretAccessKey, endpoint, bucket string) *Client {
-	c := &Client{bucket: bucket, endpoint: endpoint}
+func NewR2(accessKeyID, secretAccessKey, endpoint, bucket, publicURL string) *Client {
+	c := &Client{bucket: bucket, endpoint: endpoint, publicURL: publicURL}
 	if accessKeyID == "" || secretAccessKey == "" || endpoint == "" || bucket == "" {
 		return c
 	}
@@ -79,6 +81,33 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 		return err
 	}
 	return nil
+}
+
+// PublicURL menghasilkan URL CDN publik melalui kemenag-files-router (files.kemenag-baritoutara.com).
+func (c *Client) PublicURL(key string) string {
+	cleanKey := strings.TrimPrefix(key, "r2:")
+	cleanKey = strings.TrimPrefix(cleanKey, "/")
+	if cleanKey == "" {
+		return ""
+	}
+	baseURL := c.publicURL
+	if baseURL == "" {
+		baseURL = "https://files.kemenag-baritoutara.com"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	if strings.HasPrefix(cleanKey, "pengaduan/") {
+		return fmt.Sprintf("%s/%s", baseURL, cleanKey)
+	}
+	return fmt.Sprintf("%s/pengaduan/%s", baseURL, cleanKey)
+}
+
+// GetPublicBaseURL mengembalikan base URL CDN router.
+func (c *Client) GetPublicBaseURL() string {
+	if c.publicURL != "" {
+		return strings.TrimRight(c.publicURL, "/")
+	}
+	return "https://files.kemenag-baritoutara.com"
 }
 
 // PresignedURL menghasilkan URL unduhan sementara untuk key.

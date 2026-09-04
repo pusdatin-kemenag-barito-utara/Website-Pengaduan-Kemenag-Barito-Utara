@@ -191,18 +191,14 @@ func (s *Service) Track(ctx context.Context, ticket string) (*TrackResult, error
 		UpdatedAt:     e.UpdatedAt,
 	}
 
-	if e.FileKey != nil && s.storage.Enabled() {
+	if e.FileKey != nil && *e.FileKey != "" {
 		key := *e.FileKey
-		// Kompatibilitas data legacy yang menyimpan prefix "r2:".
-		key = strings.TrimPrefix(key, "r2:")
-		url, perr := s.storage.PresignedURL(ctx, key, 15*time.Minute)
-		if perr != nil {
-			s.log.Warn("presign gagal", "key", key, "error", perr)
+		if s.storage != nil {
+			cdnURL := s.storage.PublicURL(key)
+			res.FileURL = &cdnURL
 		} else {
-			res.FileURL = &url
+			res.FileURL = e.FileKey
 		}
-	} else if e.FileKey != nil {
-		res.FileURL = e.FileKey
 	}
 
 	return res, nil

@@ -25,6 +25,7 @@ type Config struct {
 	R2SecretAccessKey string
 	R2EndpointURL     string
 	R2BucketPengaduan string
+	R2PublicURL       string
 
 	TurnstileSecretKey string
 
@@ -62,6 +63,7 @@ func Load() (*Config, error) {
 		R2SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
 		R2EndpointURL:     os.Getenv("R2_ENDPOINT_URL"),
 		R2BucketPengaduan: getEnv("R2_BUCKET_PENGADUAN", "data-pengaduan"),
+		R2PublicURL:       getEnv("R2_PUBLIC_URL", "https://files.kemenag-baritoutara.com"),
 		TurnstileSecretKey: os.Getenv("TURNSTILE_SECRET_KEY"),
 		SessionSecret:     os.Getenv("SESSION_SECRET"),
 		SessionTTLHours:   getInt("SESSION_TTL_HOURS", 24),

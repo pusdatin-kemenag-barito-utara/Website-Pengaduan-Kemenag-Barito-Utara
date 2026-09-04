@@ -46,11 +46,15 @@ self.addEventListener('fetch', (event) => {
   // 1. Hanya proses request HTTP GET
   if (event.request.method !== 'GET') return;
 
-  // 2. Bypass ketat untuk API backend, admin portal, analytics, dan Turnstile
+  // 2. Bypass ketat untuk localhost dev, API backend, admin portal, analytics, dan Turnstile
   if (
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/pusdatin') ||
     url.pathname.startsWith('/admin') ||
+    url.pathname.startsWith('/_astro') ||
+    url.pathname.includes('@') ||
     url.hostname.includes('cloudflare') ||
     url.hostname.includes('google-analytics') ||
     url.hostname.includes('googletagmanager') ||

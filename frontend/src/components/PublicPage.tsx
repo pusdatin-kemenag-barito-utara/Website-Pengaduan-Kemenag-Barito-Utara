@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLayananList, checkTicketStatus, getAppStatus } from '../lib/api';
 import type { Layanan, TrackResult } from '../lib/api';
 import { generateTicketPng } from '../lib/ticketCanvas';
@@ -14,7 +14,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { analytics } from '../lib/analytics';
 
 export default function PublicPage() {
-  // Service List State
+  // Service List State — 100% Dinamis dari Database
   const [serviceUnitsList, setServiceUnitsList] = useState<Layanan[]>([]);
   const [isLayananLoading, setIsLayananLoading] = useState<boolean>(true);
 
@@ -54,20 +54,32 @@ export default function PublicPage() {
   }, []);
 
   // 1. Load Dynamic Services 100% from Database/Admin
-  useEffect(() => {
-    let mounted = true;
-    getLayananList()
-      .then((list) => {
-        if (mounted) setServiceUnitsList(list.filter((l) => l.is_active !== false));
-      })
-      .catch(() => setServiceUnitsList([]))
-      .finally(() => {
-        if (mounted) setIsLayananLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
+  const fetchLayanan = useCallback(async () => {
+    setIsLayananLoading(true);
+    try {
+      const list = await getLayananList();
+      setServiceUnitsList(list.filter((l) => l.is_active !== false));
+    } catch (err) {
+      console.error('Gagal memuat unit layanan dari database:', err);
+    } finally {
+      setIsLayananLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void fetchLayanan();
+
+    const handleLayananUpdate = () => {
+      void fetchLayanan();
+    };
+
+    window.addEventListener('layanan:updated', handleLayananUpdate);
+    window.addEventListener('focus', handleLayananUpdate);
+    return () => {
+      window.removeEventListener('layanan:updated', handleLayananUpdate);
+      window.removeEventListener('focus', handleLayananUpdate);
+    };
+  }, [fetchLayanan]);
 
   // 2. Auto-search ticket status if ?ticket=SGT-XXXX parameter is present (e.g. from QR Code scan)
   useEffect(() => {
@@ -206,6 +218,7 @@ export default function PublicPage() {
             }}
             onDownloadTicket={handleDownloadTicket}
             isDownloading={isDownloading}
+            onRetryLayanan={fetchLayanan}
           />
         </div>
 

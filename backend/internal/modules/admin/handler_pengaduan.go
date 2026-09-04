@@ -44,18 +44,14 @@ func (h *Handler) List(c fiber.Ctx) error {
 		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal memuat daftar pengaduan."))
 	}
 
-	// Presign URL lampiran jika storage R2 aktif
-	if h.storage != nil && h.storage.Enabled() {
+	// URL lampiran CDN via kemenag-files-router (files.kemenag-baritoutara.com)
+	if h.storage != nil {
 		for i := range res.Items {
 			if res.Items[i].FileKey != nil && *res.Items[i].FileKey != "" {
-				key := strings.TrimPrefix(*res.Items[i].FileKey, "r2:")
+				key := *res.Items[i].FileKey
 				if !strings.HasPrefix(key, "http://") && !strings.HasPrefix(key, "https://") {
-					url, perr := h.storage.PresignedURL(c.Context(), key, 2*time.Hour)
-					if perr != nil {
-						h.log.Warn("presign admin file gagal", "key", key, "error", perr)
-					} else {
-						res.Items[i].FileKey = &url
-					}
+					cdnURL := h.storage.PublicURL(key)
+					res.Items[i].FileKey = &cdnURL
 				}
 			}
 		}
@@ -83,11 +79,18 @@ func (h *Handler) FileRedirect(c fiber.Ctx) error {
 		return httpx.WriteError(c, httpx.NotFound("no_file", "Pengaduan ini tidak memiliki lampiran."))
 	}
 
+	key := strings.TrimPrefix(*item.FileKey, "r2:")
+	if h.storage != nil {
+		cdnURL := h.storage.PublicURL(key)
+		if cdnURL != "" {
+			return c.Redirect().To(cdnURL)
+		}
+	}
+
 	if h.storage == nil || !h.storage.Enabled() {
 		return httpx.WriteError(c, httpx.Internal("storage_unconfigured", "Penyimpanan berkas Cloudflare R2 belum aktif."))
 	}
 
-	key := strings.TrimPrefix(*item.FileKey, "r2:")
 	url, perr := h.storage.PresignedURL(c.Context(), key, 1*time.Hour)
 	if perr != nil {
 		h.log.Error("presign gagal", "key", key, "error", perr)

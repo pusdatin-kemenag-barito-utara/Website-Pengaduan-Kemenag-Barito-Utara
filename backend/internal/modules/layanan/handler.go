@@ -32,15 +32,18 @@ func (h *Handler) RegisterAdmin(r fiber.Router) {
 	admin.Delete("/:id", h.Delete)
 }
 
-// ListPublic menangani GET /api/v1/layanan.
+// ListPublic menangani GET /api/v1/layanan (100% dinamis dari database).
 func (h *Handler) ListPublic(c fiber.Ctx) error {
 	items, err := h.repo.ListActive(c.Context())
 	if err != nil {
 		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal memuat daftar layanan."))
 	}
-	c.Set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=600")
-	c.Set("CDN-Cache-Control", "max-age=300, stale-while-revalidate=600")
-	c.Set("Cloudflare-CDN-Cache-Control", "max-age=300, stale-while-revalidate=600")
+	if items == nil {
+		items = []Layanan{}
+	}
+	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Set("Pragma", "no-cache")
+	c.Set("Expires", "0")
 	return httpx.JSON(c, fiber.StatusOK, fiber.Map{"success": true, "data": items})
 }
 
@@ -50,6 +53,9 @@ func (h *Handler) ListAll(c fiber.Ctx) error {
 	if err != nil {
 		return httpx.WriteError(c, httpx.Internal("db_error", "Gagal memuat daftar layanan."))
 	}
+	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Set("Pragma", "no-cache")
+	c.Set("Expires", "0")
 	return httpx.JSON(c, fiber.StatusOK, fiber.Map{"success": true, "data": items})
 }
 

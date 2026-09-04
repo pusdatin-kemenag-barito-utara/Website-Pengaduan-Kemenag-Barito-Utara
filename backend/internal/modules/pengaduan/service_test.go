@@ -43,7 +43,7 @@ func (s *stubTurnstile) Verify(_ context.Context, _ string) error {
 func newTestService(repo RepositoryPort, tv TurnstileVerifier) *Service {
 	cfg := &config.Config{}
 	log := slog.New(slog.DiscardHandler)
-	return NewService(repo, cfg, storage.NewR2("", "", "", ""), tv, log)
+	return NewService(repo, cfg, storage.NewR2("", "", "", "", ""), tv, log)
 }
 
 func validInput() *SubmitInput {

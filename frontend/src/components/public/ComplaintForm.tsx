@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   AlertCircle, Building2, Check, CheckCircle2, ChevronDown, Download,
-  FileText, Info, Paperclip, Phone, RotateCcw,
+  Eye, FileText, Info, Paperclip, Phone, RotateCcw, RotateCw,
   Send, Sparkles, UserCheck, UserX, X,
 } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
@@ -19,6 +19,7 @@ interface ComplaintFormProps {
   onSuccessSubmit: (details: SubmittedDetails) => void;
   onDownloadTicket: () => void;
   isDownloading: boolean;
+  onRetryLayanan?: () => Promise<void>;
 }
 
 export default function ComplaintForm({
@@ -27,6 +28,7 @@ export default function ComplaintForm({
   onSuccessSubmit,
   onDownloadTicket,
   isDownloading,
+  onRetryLayanan,
 }: ComplaintFormProps) {
   // Form State
   const [category, setCategory] = useState<string>('Pengaduan');
@@ -211,6 +213,19 @@ export default function ComplaintForm({
       setAttachmentPreview(null);
     }
     setFileErrorMsg(null);
+  };
+
+  const handleViewAttachment = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!attachment) return;
+    const fileUrl = URL.createObjectURL(attachment);
+    window.open(fileUrl, '_blank', 'noopener,noreferrer');
+    setTimeout(() => {
+      URL.revokeObjectURL(fileUrl);
+    }, 60000);
   };
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
@@ -494,12 +509,18 @@ export default function ComplaintForm({
               aria-haspopup="listbox"
               aria-expanded={isDropdownOpen}
               aria-label="Pilih unit layanan terkait"
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              onClick={() => {
+                const nextState = !isDropdownOpen;
+                setIsDropdownOpen(nextState);
+                if (nextState && serviceUnitsList.length === 0 && !isLayananLoading && onRetryLayanan) {
+                  void onRetryLayanan();
+                }
+              }}
               className="w-full px-3.5 sm:px-5 py-3 sm:py-3.5 rounded-2xl bg-slate-50 border border-slate-300 text-left flex items-center justify-between focus:outline-none focus:border-emerald-600 transition-colors text-xs sm:text-sm font-bold text-slate-800 cursor-pointer"
             >
               <span className="flex items-center gap-2.5 truncate">
                 <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" />
-                <span className={serviceUnit ? 'text-slate-900' : 'text-slate-500 font-medium'}>
+                <span className={serviceUnit ? 'text-slate-900 font-bold' : 'text-slate-500 font-medium'}>
                   {serviceUnit || '-- Pilih Unit Layanan --'}
                 </span>
               </span>
@@ -507,11 +528,29 @@ export default function ComplaintForm({
             </button>
 
             {isDropdownOpen && (
-              <div role="listbox" aria-label="Daftar unit layanan" className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl z-30 max-h-56 overflow-y-auto p-1.5 animate-fadeIn">
+              <div role="listbox" aria-label="Daftar unit layanan" className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl z-30 max-h-60 overflow-y-auto p-1.5 animate-fadeIn">
                 {isLayananLoading ? (
-                  <div className="p-3.5 text-center text-xs text-slate-600 font-medium">Memuat data unit layanan...</div>
+                  <div className="p-4 text-center text-xs text-slate-500 font-medium flex items-center justify-center gap-2">
+                    <RotateCw className="w-3.5 h-3.5 animate-spin text-emerald-600 shrink-0" />
+                    <span>Memuat unit layanan resmi...</span>
+                  </div>
                 ) : serviceUnitsList.length === 0 ? (
-                  <div className="p-3.5 text-center text-xs text-slate-600 font-medium">Tidak ada unit layanan aktif.</div>
+                  <div className="p-4 text-center">
+                    <p className="text-xs text-slate-500 font-medium mb-2.5">Belum ada unit layanan aktif di sistem.</p>
+                    {onRetryLayanan && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void onRetryLayanan();
+                        }}
+                        className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-200 transition-all inline-flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        <RotateCw className="w-3 h-3" />
+                        <span>Coba Muat Ulang</span>
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   serviceUnitsList.map((unit) => (
                     <button
@@ -797,40 +836,84 @@ export default function ComplaintForm({
                   validateAndSetFile(e.target.files[0]);
                 }
               }}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              className={attachment ? 'hidden' : 'absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10'}
             />
 
             {attachment ? (
-              <div className="flex items-center gap-3.5 w-full text-left">
+              <div className="flex items-center gap-3 sm:gap-4 w-full text-left relative z-20">
                 {attachmentPreview ? (
-                  <img
-                    src={attachmentPreview}
-                    alt="Preview Bukti"
-                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border border-emerald-300 shrink-0 shadow-xs"
-                  />
+                  <button
+                    type="button"
+                    onClick={handleViewAttachment}
+                    className="relative group w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border border-emerald-300 shrink-0 shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    title="Klik untuk melihat pratinjau gambar di tab baru"
+                    aria-label="Buka gambar di tab baru"
+                  >
+                    <img
+                      src={attachmentPreview}
+                      alt="Preview Bukti"
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                      <Eye className="w-5 h-5 drop-shadow-md" />
+                    </div>
+                  </button>
                 ) : (
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
-                    <FileText className="w-7 h-7" />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleViewAttachment}
+                    className="relative group w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-700 hover:text-emerald-900 flex items-center justify-center shrink-0 border border-emerald-200 cursor-pointer transition-colors shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    title="Klik untuk membuka dokumen di tab baru"
+                    aria-label="Buka dokumen di tab baru"
+                  >
+                    <FileText className="w-6 h-6 sm:w-7 sm:h-7 group-hover:hidden transition-all" />
+                    <Eye className="w-5 h-5 sm:w-6 sm:h-6 hidden group-hover:block transition-all text-emerald-800" />
+                  </button>
                 )}
+
                 <div className="min-w-0 flex-1">
                   <p className="font-extrabold text-slate-900 truncate text-xs sm:text-sm">{attachment.name}</p>
-                  <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
-                    {(attachment.size / (1024 * 1024)).toFixed(2)} MB {'\u2022'} Klik atau tarik file lain untuk mengganti
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span>{(attachment.size / (1024 * 1024)).toFixed(2)} MB</span>
+                    <span>{'\u2022'}</span>
+                    <label
+                      htmlFor="attachment"
+                      className="text-emerald-800 hover:text-emerald-950 font-bold underline cursor-pointer hover:text-emerald-600 transition-colors"
+                      title="Pilih berkas pengganti"
+                    >
+                      Ganti berkas
+                    </label>
                   </p>
                 </div>
-                <button
-                  type="button"
-                  aria-label="Hapus berkas lampiran"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveAttachment();
-                  }}
-                  className="p-2 rounded-xl hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition-colors z-20 cursor-pointer shrink-0"
-                  title="Hapus berkas"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Tombol Lihat File (Icon Mata + Teks Jelas) */}
+                  <button
+                    type="button"
+                    aria-label="Buka dan lihat berkas di tab baru"
+                    onClick={handleViewAttachment}
+                    className="px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border border-emerald-300 transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-black shadow-xs active:scale-95 shrink-0"
+                    title="Buka dan lihat berkas lampiran di tab baru"
+                  >
+                    <Eye className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span>Lihat File</span>
+                  </button>
+
+                  {/* Tombol Hapus Berkas */}
+                  <button
+                    type="button"
+                    aria-label="Hapus berkas lampiran"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleRemoveAttachment();
+                    }}
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition-colors cursor-pointer shrink-0 shadow-2xs active:scale-95"
+                    title="Hapus berkas"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-2 pointer-events-none">
