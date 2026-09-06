@@ -941,19 +941,20 @@ export default function ComplaintForm({
         </div>
 
         {/* Cloudflare Turnstile Captcha Widget */}
-        <div className="flex justify-center my-3 sm:my-6 overflow-hidden">
+        <div className="w-full my-3 sm:my-6 overflow-hidden min-h-[65px]">
           <Turnstile
             siteKey={TURNSTILE_SITE_KEY}
             onSuccess={(token) => setTurnstileToken(token)}
             onError={() => setTurnstileToken('')}
-            options={{ theme: 'light' }}
+            options={{ theme: 'light', size: 'flexible' }}
+            className="w-full"
           />
         </div>
 
         {/* Submit Action Button */}
         <button
           type="submit"
-          aria-label="Kirim Pengaduan Resmi"
+          aria-label="Kirim Pengaduan"
           disabled={!isFormValid || isSubmitting}
           className={`w-full py-4 sm:py-5 rounded-2xl font-black text-sm sm:text-lg flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg ${
             isFormValid && !isSubmitting
@@ -962,7 +963,7 @@ export default function ComplaintForm({
           }`}
         >
           <Send className={`w-5 h-5 ${isSubmitting ? 'animate-bounce' : ''}`} />
-          <span>{isSubmitting ? 'Mengirim Pengaduan...' : 'Kirim Pengaduan Resmi'}</span>
+          <span>{isSubmitting ? 'Mengirim Pengaduan...' : 'Kirim Pengaduan'}</span>
         </button>
       </form>
     </div>
