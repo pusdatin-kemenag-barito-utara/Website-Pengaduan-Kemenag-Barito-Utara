@@ -74,13 +74,13 @@ func Load() (*Config, error) {
 	}
 
 	if cfg.SessionSecret == "" {
-		return nil, fmt.Errorf("SESSION_SECRET wajib diisi pada file konfigurasi environment (.env.local)")
+		return nil, fmt.Errorf("SESSION_SECRET wajib diisi pada environment (Infisical / env)")
 	}
 	if cfg.AdminPassword == "" {
-		return nil, fmt.Errorf("ADMIN_PASSWORD atau SUPER_ADMIN_PASSWORD wajib diisi pada file konfigurasi environment (.env.local)")
+		return nil, fmt.Errorf("ADMIN_PASSWORD atau SUPER_ADMIN_PASSWORD wajib diisi pada environment (Infisical / env)")
 	}
 	if cfg.AdminEmail == "" {
-		return nil, fmt.Errorf("ADMIN_EMAIL atau SUPER_ADMIN_EMAIL wajib diisi pada file konfigurasi environment (.env.local)")
+		return nil, fmt.Errorf("ADMIN_EMAIL atau SUPER_ADMIN_EMAIL wajib diisi pada environment (Infisical / env)")
 	}
 	return cfg, nil
 }

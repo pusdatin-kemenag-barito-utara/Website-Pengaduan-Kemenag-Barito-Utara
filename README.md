@@ -24,12 +24,9 @@ Satu perintah dari root: `npm run dev` — menyalakan **backend (port 8080)** da
 ```bash
 # 0. Instal dependensi (sekali saja)
 npm install
-# 1. Siapkan env (sekali saja, di root monorepo)
-cp .env.example .env.local
-# isi DATABASE_URL, SUPABASE_ANON_KEY, TURNSTILE_SECRET_KEY, SESSION_SECRET
 
-# 2. Jalankan FE + BE sekaligus
-npm run dev
+# 1. Jalankan FE + BE sekaligus dengan injeksi Infisical Cloud
+npm run dev:infisical
 ```
 
 Alternatif terpisah: `npm run dev:backend` (Air, port 8080) atau
@@ -37,10 +34,10 @@ Alternatif terpisah: `npm run dev:backend` (Air, port 8080) atau
 manual tanpa Air: `cd backend && go run ./cmd/api`.
 
 Migrasi schema + seed dijalankan otomatis saat backend pertama kali menyala.
-Backend membaca `.env.local` dari direktori kerjanya, lalu fallback ke root
-monorepo. Frontend membacanya via `envDir: '../'` di `astro.config.mjs`.
+Seluruh variabel lingkungan disuplai langsung oleh **Infisical Cloud** (folder `/pengaduan-kemenag`).
+Tidak memerlukan file `.env` atau `.env.example` lokal.
 
-Frontend menyalin seluruh request `/api/*` ke backend melalui `src/fetch.ts`
+Frontend menyalin seluruh request `/api/*` ke backend melalui `src/middleware.ts`
 (Advanced Routing Astro 7). Variabel `BACKEND_INTERNAL_URL` menunjuk ke
 backend (default `http://127.0.0.1:8080`).
 
@@ -51,36 +48,37 @@ backend (default `http://127.0.0.1:8080`).
 | Barcode QR       | `/barcode`      |
 | Panel admin      | `/admin`        |
 
-## Variabel lingkungan
+## Variabel lingkungan (Tersentralisasi di Infisical Cloud)
 
-Satu file `/.env.local` (contoh: `/.env.example`). Variabel dibaca bersama oleh
-backend dan frontend:
+Seluruh konfigurasi dikelola terpusat di **Infisical Cloud** (folder `/pengaduan-kemenag`, environment `dev` & `prod`):
 
 | Variabel                     | Dipakai   | Keterangan                                   |
 | ---------------------------- | --------- | -------------------------------------------- |
-| `PORT`, `HOST`               | Backend   | Port HTTP (default 8080)                     |
+| `PORT`, `HOST`               | Backend   | Port HTTP internal (default 8080)            |
 | `DATABASE_URL`               | Backend   | Pooler Supavisor (`:6543`), schema `kemenag-pengaduan` |
-| `DB_SCHEMA`                  | Backend   | Schema aplikasi (default `kemenag-pengaduan`)|
-| `ADMIN_EMAIL`                | Backend   | Email/Username Super Admin (default baritoutara@kemenag.go.id) |
-| `ADMIN_PASSWORD`             | Backend   | Kata sandi Super Admin                       |
-| `ADMIN_NAME`                 | Backend   | Nama tampilan Super Admin                    |
+| `DB_SCHEMA`                  | Backend   | Schema aplikasi (`kemenag-pengaduan`)        |
+| `SUPER_ADMIN_EMAIL` / `ADMIN_EMAIL` | Backend | Email / username akun Super Admin       |
+| `SUPER_ADMIN_PASSWORD`       | Backend   | Kata sandi akun Super Admin                  |
+| `SUPER_ADMIN_NAME`           | Backend   | Nama tampilan Super Admin                    |
 | `SESSION_SECRET`             | Backend   | Rahasia penandatangan hash sesi admin        |
 | `SESSION_TTL_HOURS`          | Backend   | Umur sesi admin (default 24)                 |
-| `COOKIE_SECURE`              | Backend   | `true` di produksi (HTTPS)                   |
+| `COOKIE_SECURE`              | Backend   | `true` di produksi (HTTPS), `false` di dev   |
 | `TURNSTILE_SECRET_KEY`       | Backend   | Secret Cloudflare Turnstile (fail-closed)    |
-| `R2_*`                       | Backend   | Kredensial Cloudflare R2 untuk lampiran (opsional) |
-| `BACKEND_INTERNAL_URL`       | Frontend  | URL backend untuk proxy `/api/*` (default `http://127.0.0.1:8080`) |
+| `R2_*`                       | Backend   | Kredensial Cloudflare R2 untuk lampiran      |
+| `BACKEND_INTERNAL_URL`       | Frontend  | URL backend untuk proxy `/api/*`             |
 | `PUBLIC_TURNSTILE_SITE_KEY`  | Frontend  | Site key Cloudflare Turnstile (publik)       |
-| `PUBLIC_SITE_NAME`           | Frontend  | Nama situs tampilan (opsional)               |
-| `PUBLIC_SITE_URL`            | Keduanya  | URL publik situs — QR bukti tiket (FE), CORS (BE) |
+| `PUBLIC_SITE_NAME`           | Frontend  | Nama situs tampilan                          |
+| `PUBLIC_SITE_URL`            | Keduanya  | URL publik situs (FE & CORS BE)              |
+| `PUBLIC_HELPDESK_WHATSAPP`   | Frontend  | Nomor WhatsApp Helpdesk layanan              |
 | `ALLOW_DEV_ORIGIN`           | Backend   | Origin tambahan yang diizinkan CORS (dev)    |
 
-## Deploy dengan Docker
+## Deploy dengan Docker & Coolify
+
+Aplikasi berjalan dalam satu container terpadu (*unified single container*) dengan injeksi otomatis Infisical Universal Auth saat booting:
 
 ```bash
-# Siapkan env (root monorepo), lalu deploy
-cp .env.example .env.local   # isi kredensial produksi
-docker compose --env-file .env.local up -d --build
+# Jalankan container (Infisical Universal Auth menginjeksi secrets saat boot)
+docker compose up -d --build
 ```
 
 - Backend: `backend/Dockerfile` (multi-stage Go, image Alpine, user `nobody`, migrasi otomatis saat start).

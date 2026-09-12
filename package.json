@@ -4,9 +4,14 @@
   "private": true,
   "description": "SI-GESIT — Pengaduan Masyarakat Kemenag Barito Utara (dev orchestrator)",
   "scripts": {
-    "dev": "concurrently -k -n BE,FE -c yellow,cyan \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && go run github.com/air-verse/air@v1.67.4 -c .air.toml",
-    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:prod": "node scripts/dev.mjs --prod",
+    "dev:check": "node scripts/dev.mjs --check",
+    "dev:backend": "node scripts/dev.mjs --backend",
+    "dev:frontend": "node scripts/dev.mjs --frontend",
+    "dev:stack": "concurrently -k -n BE,FE -c yellow,cyan \"npm run stack:backend\" \"npm run stack:frontend\"",
+    "stack:backend": "cd backend && go run github.com/air-verse/air@v1.67.4 -c .air.toml",
+    "stack:frontend": "cd frontend && npm run dev",
     "install:all": "npm install && npm --prefix frontend install"
   },
   "devDependencies": {

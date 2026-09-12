@@ -357,7 +357,7 @@ export default function ComplaintForm({
   const currentCategoryObj = CATEGORIES.find((c) => c.id === category);
 
   return (
-    <div className="lg:col-span-8 xl:col-span-8 bg-white/95 backdrop-blur-xl rounded-3xl sm:rounded-4xl p-5 sm:p-8 md:p-10 shadow-xl border border-slate-200/80 transition-all flex flex-col">
+    <div className="col-span-1 lg:col-span-8 xl:col-span-8 bg-white/95 backdrop-blur-xl rounded-3xl sm:rounded-4xl p-5 sm:p-8 md:p-10 shadow-xl border border-slate-200/80 transition-all flex flex-col">
       {/* Header Form & Draft Status */}
       <div className="mb-5 sm:mb-6 border-b border-slate-100 pb-4 sm:pb-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">

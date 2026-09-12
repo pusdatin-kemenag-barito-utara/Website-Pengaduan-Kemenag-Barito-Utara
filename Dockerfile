@@ -34,8 +34,8 @@ COPY frontend/ ./
 ARG PUBLIC_SITE_URL="https://pengaduan.kemenag-baritoutara.com"
 ARG PUBLIC_SITE_NAME="SI-GESIT — Pengaduan Masyarakat Kemenag Barito Utara"
 ARG PUBLIC_TURNSTILE_SITE_KEY=""
-ARG PUBLIC_GA_MEASUREMENT_ID="G-56V7KYCD71"
-ARG PUBLIC_GTAG_ID="GT-T5RE5PM8"
+ARG PUBLIC_GA_MEASUREMENT_ID=""
+ARG PUBLIC_GTAG_ID=""
 
 ENV PUBLIC_SITE_URL="${PUBLIC_SITE_URL}"
 ENV PUBLIC_SITE_NAME="${PUBLIC_SITE_NAME}"
@@ -49,7 +49,9 @@ RUN npm run build
 # Stage 4: Production Runtime (Unified Single Container)
 # ===================================================
 FROM node:22-alpine AS runner
-RUN apk add --no-cache ca-certificates tzdata wget curl dos2unix
+RUN apk add --no-cache ca-certificates tzdata wget curl dos2unix bash \
+    && curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.alpine.sh' | bash \
+    && apk add --no-cache infisical
 WORKDIR /app
 
 ENV NODE_ENV=production

@@ -394,7 +394,16 @@ const schemaOrgJsonLd = {
 
     <script is:inline>
       if ('serviceWorker' in navigator) {
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        var isDevOrLocal =
+          window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1' ||
+          window.location.hostname.startsWith('192.168.') ||
+          window.location.hostname.startsWith('172.') ||
+          window.location.hostname.startsWith('10.') ||
+          window.location.hostname.endsWith('.local') ||
+          window.location.port !== '';
+
+        if (isDevOrLocal) {
           navigator.serviceWorker.getRegistrations().then(function(registrations) {
             for (var i = 0; i < registrations.length; i++) {
               registrations[i].unregister();

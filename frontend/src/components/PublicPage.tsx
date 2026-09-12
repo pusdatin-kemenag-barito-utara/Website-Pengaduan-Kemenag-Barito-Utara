@@ -195,7 +195,7 @@ export default function PublicPage() {
           </div>
 
           {/* Left Panel - Illustration Banner */}
-          <div className="hidden lg:block lg:col-span-4 xl:col-span-4 print:hidden">
+          <div className="max-lg:hidden lg:col-span-4 xl:col-span-4 print:hidden">
             <img
               src="/pengaduan-v2.webp"
               alt="Layanan Pengaduan Kemenag Barito Utara"

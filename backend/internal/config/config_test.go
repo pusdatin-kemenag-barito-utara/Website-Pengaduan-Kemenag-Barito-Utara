@@ -30,6 +30,27 @@ func TestLoadFromMonorepoRoot(t *testing.T) {
 	}
 }
 
+func TestLoadFromEnvironment(t *testing.T) {
+	t.Setenv("SESSION_SECRET", "mock-session-secret-for-test")
+	t.Setenv("SUPER_ADMIN_PASSWORD", "mock-admin-password")
+	t.Setenv("SUPER_ADMIN_EMAIL", "mock-admin@kemenag.go.id")
+	t.Setenv("PUBLIC_SITE_URL", "https://pengaduan.kemenag-baritoutara.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.SessionSecret != "mock-session-secret-for-test" {
+		t.Errorf("SessionSecret = %q, want mock-session-secret-for-test", cfg.SessionSecret)
+	}
+	if cfg.AdminEmail != "mock-admin@kemenag.go.id" {
+		t.Errorf("AdminEmail = %q, want mock-admin@kemenag.go.id", cfg.AdminEmail)
+	}
+	if cfg.PublicSiteURL != "https://pengaduan.kemenag-baritoutara.com" {
+		t.Errorf("PublicSiteURL = %q, want https://pengaduan.kemenag-baritoutara.com", cfg.PublicSiteURL)
+	}
+}
+
 func monorepoRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()

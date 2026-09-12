@@ -27,52 +27,49 @@ func TestHashToken(t *testing.T) {
 
 func TestVerifyCredentials(t *testing.T) {
 	cfg := &config.Config{
-		AdminEmail:    "baritoutara@kemenag.go.id",
-		AdminPassword: "@Kemenag_126",
-		AdminName:     "Super Admin Kemenag Barito Utara",
+		AdminEmail:    "admin@kemenag.go.id",
+		AdminPassword: "MockSecretPassword123!",
+		AdminName:     "Test Administrator",
 	}
 
 	svc := &Service{cfg: cfg}
 
 	// 1. Email lengkap valid
-	if !svc.verifyCredentials("baritoutara@kemenag.go.id", "@Kemenag_126") {
+	if !svc.verifyCredentials("admin@kemenag.go.id", "MockSecretPassword123!") {
 		t.Fatal("email lengkap valid harus berhasil")
 	}
 
 	// 2. Prefix username valid
-	if !svc.verifyCredentials("baritoutara", "@Kemenag_126") {
+	if !svc.verifyCredentials("admin", "MockSecretPassword123!") {
 		t.Fatal("prefix username valid harus berhasil")
 	}
 
 	// 3. Alias valid
-	if !svc.verifyCredentials("superadmin", "@Kemenag_126") {
+	if !svc.verifyCredentials("superadmin", "MockSecretPassword123!") {
 		t.Fatal("alias superadmin harus berhasil")
-	}
-	if !svc.verifyCredentials("admin", "@Kemenag_126") {
-		t.Fatal("alias admin harus berhasil")
 	}
 
 	// 4. Case-insensitivity email
-	if !svc.verifyCredentials("BaritoUtara@Kemenag.GO.ID", "@Kemenag_126") {
+	if !svc.verifyCredentials("Admin@Kemenag.GO.ID", "MockSecretPassword123!") {
 		t.Fatal("email huruf besar harus berhasil")
 	}
 
 	// 5. Password salah
-	if svc.verifyCredentials("baritoutara@kemenag.go.id", "salah123") {
+	if svc.verifyCredentials("admin@kemenag.go.id", "salah123") {
 		t.Fatal("password salah tidak boleh berhasil")
 	}
 
 	// 6. Username salah
-	if svc.verifyCredentials("orang_asing@gmail.com", "@Kemenag_126") {
+	if svc.verifyCredentials("orang_asing@gmail.com", "MockSecretPassword123!") {
 		t.Fatal("username tidak dikenal tidak boleh berhasil")
 	}
 }
 
 func TestAuthValidation(t *testing.T) {
 	cfg := &config.Config{
-		AdminEmail:      "baritoutara@kemenag.go.id",
-		AdminPassword:   "@Kemenag_126",
-		AdminName:       "Super Admin Kemenag Barito Utara",
+		AdminEmail:      "admin@kemenag.go.id",
+		AdminPassword:   "MockSecretPassword123!",
+		AdminName:       "Test Administrator",
 		SessionTTLHours: 24,
 	}
 
@@ -84,13 +81,13 @@ func TestAuthValidation(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Empty username
-	_, err := svc.Login(ctx, "", "@Kemenag_126", "127.0.0.1")
+	_, err := svc.Login(ctx, "", "MockSecretPassword123!", "127.0.0.1")
 	if err == nil {
 		t.Fatal("harus gagal saat username kosong")
 	}
 
 	// 2. Empty password
-	_, err = svc.Login(ctx, "baritoutara@kemenag.go.id", "", "127.0.0.1")
+	_, err = svc.Login(ctx, "admin@kemenag.go.id", "", "127.0.0.1")
 	if err == nil {
 		t.Fatal("harus gagal saat password kosong")
 	}
