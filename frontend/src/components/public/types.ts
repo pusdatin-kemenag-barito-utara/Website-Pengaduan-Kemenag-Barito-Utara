@@ -20,8 +20,18 @@ export const CATEGORIES: CategoryOption[] = [
   { id: 'Tanggapan', label: 'Tanggapan', icon: MessageCircle, desc: 'Respon kebijakan' },
 ];
 
-export const TURNSTILE_SITE_KEY =
-  import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+export const getTurnstileSiteKey = (): string => {
+  if (typeof window !== 'undefined' && (window as any).__PUBLIC_TURNSTILE_SITE_KEY__) {
+    return (window as any).__PUBLIC_TURNSTILE_SITE_KEY__;
+  }
+  return (
+    (typeof process !== 'undefined' && process.env?.PUBLIC_TURNSTILE_SITE_KEY) ||
+    import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ||
+    ''
+  );
+};
+
+export const TURNSTILE_SITE_KEY = getTurnstileSiteKey();
 
 export interface SubmittedDetails extends TicketDetails {
   subject?: string;

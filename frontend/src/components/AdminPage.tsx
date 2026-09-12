@@ -27,7 +27,11 @@ import SystemSettingsView from './admin/SystemSettingsView';
 import type { Tab } from './admin/types';
 import { ITEMS_PER_PAGE } from './admin/types';
 
-export default function AdminPage() {
+interface AdminPageProps {
+  turnstileSiteKey?: string;
+}
+
+export default function AdminPage({ turnstileSiteKey }: AdminPageProps = {}) {
   // App Status from Pusdatin
   const [appStatus, setAppStatus] = useState<AppStatusResult | null>(null);
 
@@ -288,6 +292,7 @@ export default function AdminPage() {
   if (!isAuthenticated) {
     return (
       <AdminLogin
+        turnstileSiteKey={turnstileSiteKey}
         onLoginSuccess={(me) => {
           setAdminInfo(me);
           setIsAuthenticated(true);

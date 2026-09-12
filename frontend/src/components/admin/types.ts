@@ -7,8 +7,18 @@ export type Tab =
   | 'laporan'
   | 'settings';
 
-export const TURNSTILE_SITE_KEY =
-  import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+export const getTurnstileSiteKey = (): string => {
+  if (typeof window !== 'undefined' && (window as any).__PUBLIC_TURNSTILE_SITE_KEY__) {
+    return (window as any).__PUBLIC_TURNSTILE_SITE_KEY__;
+  }
+  return (
+    (typeof process !== 'undefined' && process.env?.PUBLIC_TURNSTILE_SITE_KEY) ||
+    import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ||
+    ''
+  );
+};
+
+export const TURNSTILE_SITE_KEY = getTurnstileSiteKey();
 
 export const ITEMS_PER_PAGE = 10;
 export const STATUS_OPTIONS = ['Menunggu', 'Diproses', 'Selesai', 'Ditolak'];

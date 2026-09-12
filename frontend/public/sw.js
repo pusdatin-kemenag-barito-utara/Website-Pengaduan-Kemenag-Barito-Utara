@@ -43,8 +43,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. Hanya proses request HTTP GET
+  // 1. Hanya proses request HTTP/HTTPS GET (abaikan skema non-http seperti chrome-extension)
   if (event.request.method !== 'GET') return;
+  if (!url.protocol.startsWith('http')) return;
 
   // 2. Bypass ketat untuk localhost dev, API backend, admin portal, analytics, dan Turnstile
   if (

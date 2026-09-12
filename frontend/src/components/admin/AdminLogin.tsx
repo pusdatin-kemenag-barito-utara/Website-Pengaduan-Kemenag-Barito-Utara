@@ -3,13 +3,19 @@ import { AlertCircle, ArrowLeft, ArrowRight, Eye, EyeOff, Lock, User } from 'luc
 import { Turnstile } from '@marsidev/react-turnstile';
 import { adminLogin } from '../../lib/apiAdmin';
 import { analytics } from '../../lib/analytics';
-import { TURNSTILE_SITE_KEY } from './types';
+import { getTurnstileSiteKey } from './types';
 
 interface AdminLoginProps {
   onLoginSuccess: (me: { email: string; role: string }) => void;
+  turnstileSiteKey?: string;
 }
 
-export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
+export default function AdminLogin({ onLoginSuccess, turnstileSiteKey }: AdminLoginProps) {
+  const effectiveSiteKey =
+    turnstileSiteKey ||
+    (typeof window !== 'undefined' && (window as any).__PUBLIC_TURNSTILE_SITE_KEY__) ||
+    getTurnstileSiteKey() ||
+    '';
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -216,14 +222,16 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
             </div>
 
             {/* Cloudflare Turnstile Bot Protection */}
-            <div className="flex justify-center pt-1 overflow-hidden min-h-[65px]">
-              <Turnstile
-                key={turnstileKey}
-                siteKey={TURNSTILE_SITE_KEY}
-                onSuccess={() => undefined}
-                options={{ theme: 'light', size: 'flexible' }}
-              />
-            </div>
+            {effectiveSiteKey ? (
+              <div className="flex justify-center pt-1 overflow-hidden min-h-[65px]">
+                <Turnstile
+                  key={turnstileKey}
+                  siteKey={effectiveSiteKey}
+                  onSuccess={() => undefined}
+                  options={{ theme: 'light', size: 'flexible' }}
+                />
+              </div>
+            ) : null}
 
             {/* Submit CTA Button */}
             <button

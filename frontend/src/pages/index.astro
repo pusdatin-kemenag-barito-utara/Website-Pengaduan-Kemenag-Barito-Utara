@@ -1,8 +1,13 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PublicPage from '../components/PublicPage';
+
+const turnstileSiteKey =
+  (typeof process !== 'undefined' && process.env?.PUBLIC_TURNSTILE_SITE_KEY) ||
+  import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ||
+  '';
 ---
 
 <BaseLayout>
-  <PublicPage client:load />
+  <PublicPage client:load turnstileSiteKey={turnstileSiteKey} />
 </BaseLayout>

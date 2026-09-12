@@ -9,13 +9,14 @@ import ModernDatePicker from '../ModernDatePicker';
 import { submitPengaduan } from '../../lib/api';
 import type { Layanan } from '../../lib/api';
 import { analytics } from '../../lib/analytics';
-import { CATEGORIES, TURNSTILE_SITE_KEY, type SubmittedDetails } from './types';
+import { CATEGORIES, getTurnstileSiteKey, type SubmittedDetails } from './types';
 
 const DRAFT_KEY = 'sigesit_complaint_draft';
 
 interface ComplaintFormProps {
   serviceUnitsList: Layanan[];
   isLayananLoading: boolean;
+  turnstileSiteKey?: string;
   onSuccessSubmit: (details: SubmittedDetails) => void;
   onDownloadTicket: () => void;
   isDownloading: boolean;
@@ -25,11 +26,17 @@ interface ComplaintFormProps {
 export default function ComplaintForm({
   serviceUnitsList,
   isLayananLoading,
+  turnstileSiteKey,
   onSuccessSubmit,
   onDownloadTicket,
   isDownloading,
   onRetryLayanan,
 }: ComplaintFormProps) {
+  const effectiveSiteKey =
+    turnstileSiteKey ||
+    (typeof window !== 'undefined' && (window as any).__PUBLIC_TURNSTILE_SITE_KEY__) ||
+    getTurnstileSiteKey() ||
+    '';
   // Form State
   const [category, setCategory] = useState<string>('Pengaduan');
   const [serviceUnit, setServiceUnit] = useState<string>('');
@@ -173,7 +180,7 @@ export default function ComplaintForm({
     if (category === 'Keluhan' && !officerName.trim()) return false;
     if (category === 'Informasi' && !infoPurpose.trim()) return false;
     if (category === 'Tanggapan' && !subject.trim()) return false;
-    if (!turnstileToken) return false;
+    if (effectiveSiteKey && !turnstileToken) return false;
     return true;
   })();
 
@@ -941,15 +948,18 @@ export default function ComplaintForm({
         </div>
 
         {/* Cloudflare Turnstile Captcha Widget */}
-        <div className="w-full my-3 sm:my-6 overflow-hidden min-h-[65px]">
-          <Turnstile
-            siteKey={TURNSTILE_SITE_KEY}
-            onSuccess={(token) => setTurnstileToken(token)}
-            onError={() => setTurnstileToken('')}
-            options={{ theme: 'light', size: 'flexible' }}
-            className="w-full"
-          />
-        </div>
+        {effectiveSiteKey ? (
+          <div className="w-full my-3 sm:my-6 overflow-hidden min-h-[65px]">
+            <Turnstile
+              siteKey={effectiveSiteKey}
+              onSuccess={(token) => setTurnstileToken(token)}
+              onError={() => setTurnstileToken('')}
+              onExpire={() => setTurnstileToken('')}
+              options={{ theme: 'light', size: 'flexible' }}
+              className="w-full"
+            />
+          </div>
+        ) : null}
 
         {/* Submit Action Button */}
         <button

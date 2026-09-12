@@ -21,6 +21,10 @@ const gaId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID || '';
 const googleTagId = import.meta.env.PUBLIC_GTAG_ID || '';
 const gtmId = import.meta.env.PUBLIC_GTM_ID || '';
 const cfBeaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN || '';
+const turnstileSiteKey =
+  (typeof process !== 'undefined' && process.env?.PUBLIC_TURNSTILE_SITE_KEY) ||
+  import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ||
+  '';
 
 // Structured Data JSON-LD (Schema.org GovernmentOrganization & GovernmentService)
 const schemaOrgJsonLd = {
@@ -81,6 +85,10 @@ const schemaOrgJsonLd = {
 <!doctype html>
 <html lang="id">
   <head>
+    {/* Dynamic Runtime Infisical Environment Variables for Client */}
+    <script is:inline define:vars={{ turnstileSiteKey }}>
+      window.__PUBLIC_TURNSTILE_SITE_KEY__ = turnstileSiteKey || '';
+    </script>
     {/* ================================================================= */}
     {/* 1. BASIC META & VIEWPORT                                          */}
     {/* ================================================================= */}

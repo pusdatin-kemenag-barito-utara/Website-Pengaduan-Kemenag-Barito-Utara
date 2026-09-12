@@ -12,8 +12,11 @@ import { Clock, MapPin, MessageCircle, ShieldCheck } from 'lucide-react';
 import type { SubmittedDetails } from './public/types';
 import { QRCodeCanvas } from 'qrcode.react';
 import { analytics } from '../lib/analytics';
+interface PublicPageProps {
+  turnstileSiteKey?: string;
+}
 
-export default function PublicPage() {
+export default function PublicPage({ turnstileSiteKey }: PublicPageProps = {}) {
   // Service List State — 100% Dinamis dari Database
   const [serviceUnitsList, setServiceUnitsList] = useState<Layanan[]>([]);
   const [isLayananLoading, setIsLayananLoading] = useState<boolean>(true);
@@ -212,6 +215,7 @@ export default function PublicPage() {
           <ComplaintForm
             serviceUnitsList={serviceUnitsList}
             isLayananLoading={isLayananLoading}
+            turnstileSiteKey={turnstileSiteKey}
             onSuccessSubmit={(details) => {
               setSubmittedDetails(details);
               setIsSuccessModalOpen(true);
