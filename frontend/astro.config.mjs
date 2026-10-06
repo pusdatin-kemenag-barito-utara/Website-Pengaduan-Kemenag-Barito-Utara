@@ -8,6 +8,9 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   site: 'https://pengaduan.kemenag-baritoutara.com',
   output: 'server',
+  security: {
+    checkOrigin: false,
+  },
   adapter: node({ mode: 'standalone' }),
   integrations: [react()],
   vite: {

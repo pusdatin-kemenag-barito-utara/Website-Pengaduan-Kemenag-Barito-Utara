@@ -144,11 +144,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const backendURL = import.meta.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:8080';
   if (pathname === '/health' || pathname.startsWith('/api/')) {
     const target = new URL(pathname + context.url.search, backendURL);
-    const forwarded = new Request(target, context.request);
-    forwarded.headers.set('X-Forwarded-For', context.request.headers.get('X-Forwarded-For') || context.clientAddress || '');
+    const headers = new Headers(context.request.headers);
+    headers.set('X-Forwarded-For', context.request.headers.get('X-Forwarded-For') || context.clientAddress || '');
+    headers.set('X-Forwarded-Host', context.request.headers.get('Host') || context.url.host);
+    headers.set('X-Forwarded-Proto', context.url.protocol.replace(':', ''));
+
+    const hasBody = !['GET', 'HEAD'].includes(context.request.method);
+    const forwarded = new Request(target, {
+      method: context.request.method,
+      headers,
+      body: hasBody ? context.request.body : undefined,
+      // @ts-ignore
+      duplex: 'half',
+    });
+
     try {
       return await fetch(forwarded);
-    } catch {
+    } catch (err) {
+      console.error('[FE:PROXY:ERROR]', context.request.method, pathname, '->', target.toString(), err);
       return new Response(
         JSON.stringify({ success: false, message: 'Server backend sedang memulai, silakan muat ulang sejenak.' }),
         { status: 503, headers: { 'Content-Type': 'application/json' } }
