@@ -13,9 +13,10 @@ import (
 type Config struct {
 	Port      string
 	Host      string
-	AppSchema string
 
-	DatabaseURL string
+	PocketBaseURL           string
+	PocketBaseAdminEmail    string
+	PocketBaseAdminPassword string
 
 	AdminEmail    string
 	AdminPassword string
@@ -52,12 +53,13 @@ func Load() (*Config, error) {
 	adminName := getEnv("SUPER_ADMIN_NAME", getEnv("ADMIN_NAME", "Super Admin"))
 
 	cfg := &Config{
-		Port:              getEnv("PORT", "8080"),
-		Host:              getEnv("HOST", "0.0.0.0"),
-		AppSchema:         getEnv("DB_SCHEMA", "kemenag-pengaduan"),
-		DatabaseURL:       os.Getenv("DATABASE_URL"),
-		AdminEmail:        adminEmail,
-		AdminPassword:     adminPass,
+		Port:                    getEnv("PORT", "8080"),
+		Host:                    getEnv("HOST", "0.0.0.0"),
+		PocketBaseURL:           getEnv("POCKETBASE_URL", "https://db-pengaduan.kemenag-baritoutara.com"),
+		PocketBaseAdminEmail:    getEnv("POCKETBASE_ADMIN_EMAIL", adminEmail),
+		PocketBaseAdminPassword: getEnv("POCKETBASE_ADMIN_PASSWORD", adminPass),
+		AdminEmail:              adminEmail,
+		AdminPassword:           adminPass,
 		AdminName:         adminName,
 		R2AccessKeyID:     os.Getenv("R2_ACCESS_KEY_ID"),
 		R2SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),

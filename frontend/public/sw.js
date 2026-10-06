@@ -59,7 +59,8 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('cloudflare') ||
     url.hostname.includes('google-analytics') ||
     url.hostname.includes('googletagmanager') ||
-    url.hostname.includes('supabase')
+    url.hostname.includes('db-pengaduan') ||
+    url.hostname.includes('pocketbase')
   ) {
     return;
   }

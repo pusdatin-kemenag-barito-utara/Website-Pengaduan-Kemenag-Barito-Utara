@@ -1,7 +1,7 @@
 // Package auth menangani autentikasi super_admin mandiri:
 // 1. Verifikasi kredensial langsung terhadap konfigurasi super_admin (tanpa dependensi eksternal),
-// 2. Proteksi brute-force & lockout per IP via tabel lokal login_attempts,
-// 3. Sesi server-side dengan cookie HttpOnly (hash SHA-256 di DB sessions).
+// 2. Proteksi brute-force & lockout per IP via koleksi login_attempts di PocketBase,
+// 3. Sesi server-side dengan cookie HttpOnly (hash SHA-256 di koleksi sessions).
 package auth
 
 import (
@@ -16,9 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/config"
+	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/database"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/ratelimit"
 )
@@ -34,24 +33,38 @@ var (
 	ErrInvalidCredentials = errors.New("email atau password salah")
 )
 
+// LoginAttempt merepresentasikan catatan percobaan login per IP.
+type LoginAttempt struct {
+	ID           string           `json:"id"`
+	IPAddress    string           `json:"ip_address"`
+	AttemptCount int              `json:"attempt_count"`
+	LastAttempt  database.PBTime  `json:"last_attempt"`
+	LockoutUntil *database.PBTime `json:"lockout_until"`
+}
+
+// SessionRecord merepresentasikan catatan sesi di PocketBase.
+type SessionRecord struct {
+	ID         string          `json:"id"`
+	TokenHash  string          `json:"token_hash"`
+	AdminEmail string          `json:"admin_email"`
+	Role       string          `json:"role"`
+	ExpiresAt  database.PBTime `json:"expires_at"`
+}
+
 // Service memuat logika autentikasi & sesi super_admin mandiri.
 type Service struct {
-	pool      *pgxpool.Pool
+	db        *database.DB
 	cfg       *config.Config
 	log       *slog.Logger
-	attempts  string
-	sessions  string
 	ipLimiter *ratelimit.Limiter
 }
 
-// NewService membuat Service auth mandiri. Seluruh tabel tersimpan di skema internal aplikasi.
-func NewService(pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger, appSchema string) *Service {
+// NewService membuat Service auth mandiri.
+func NewService(db *database.DB, cfg *config.Config, log *slog.Logger) *Service {
 	return &Service{
-		pool:      pool,
+		db:        db,
 		cfg:       cfg,
 		log:       log,
-		attempts:  fmt.Sprintf("%q.%q", appSchema, "login_attempts"),
-		sessions:  fmt.Sprintf("%q.%q", appSchema, "sessions"),
 		ipLimiter: ratelimit.New(10, time.Minute),
 	}
 }
@@ -81,7 +94,7 @@ func (s *Service) Login(ctx context.Context, usernameOrEmail, password, ip strin
 		return nil, httpx.TooManyRequests("rate_limited", "Terlalu banyak percobaan login. Coba lagi nanti.")
 	}
 
-	// 1) Cek status lockout IP pada database lokal
+	// 1) Cek status lockout IP pada database
 	locked, wait, errLockout := s.checkLockout(ctx, ip)
 	if errLockout != nil {
 		s.log.Error("gagal periksa status lockout login", "error", errLockout)
@@ -92,7 +105,7 @@ func (s *Service) Login(ctx context.Context, usernameOrEmail, password, ip strin
 			fmt.Sprintf("Terlalu banyak percobaan. Coba lagi dalam %d menit.", int(wait.Minutes())+1))
 	}
 
-	// 2) Verifikasi kredensial super_admin mandiri (konfigurasi .env.local)
+	// 2) Verifikasi kredensial super_admin mandiri
 	if !s.verifyCredentials(inputUser, password) {
 		if s.log != nil {
 			s.log.Warn("percobaan login super_admin gagal", "user", inputUser, "ip", ip)
@@ -104,7 +117,7 @@ func (s *Service) Login(ctx context.Context, usernameOrEmail, password, ip strin
 	// 3) Reset attempts di background saat login berhasil
 	go s.resetAttempts(context.Background(), ip)
 
-	// 4) Terbitkan token sesi acak aman; simpan hash SHA-256 di database lokal
+	// 4) Terbitkan token sesi acak aman; simpan hash SHA-256 di database
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return nil, httpx.Internal("internal_error", "Gagal membuat sesi.")
@@ -119,16 +132,19 @@ func (s *Service) Login(ctx context.Context, usernameOrEmail, password, ip strin
 	}
 	role := "super_admin"
 
-	if _, err := s.pool.Exec(ctx, fmt.Sprintf(`
-		INSERT INTO %s (token_hash, admin_email, role, expires_at)
-		VALUES ($1, $2, $3, $4)`, s.sessions),
-		hashToken(token), adminEmail, role, expires); err != nil {
-		s.log.Error("insert session gagal", "error", err)
-		return nil, httpx.Internal("db_error", "Gagal membuat sesi.")
+	if s.db != nil {
+		sessRec := map[string]any{
+			"token_hash":  hashToken(token),
+			"admin_email": adminEmail,
+			"role":        role,
+			"expires_at":  expires.Format(time.RFC3339),
+		}
+		if _, err := database.CreateRecord[SessionRecord](ctx, s.db, "sessions", sessRec); err != nil {
+			s.log.Error("insert session gagal", "error", err)
+			return nil, httpx.Internal("db_error", "Gagal membuat sesi.")
+		}
+		go s.purgeExpiredSessions(context.Background())
 	}
-
-	// Pembersihan sesi kedaluwarsa di background
-	go s.purgeExpiredSessions(context.Background())
 
 	return &Session{
 		Token:      token,
@@ -141,149 +157,149 @@ func (s *Service) Login(ctx context.Context, usernameOrEmail, password, ip strin
 
 // Lookup memvalidasi token sesi dan mengembalikan data super_admin.
 func (s *Service) Lookup(ctx context.Context, token string) (*Session, error) {
-	if token == "" {
+	if token == "" || s.db == nil {
 		return nil, ErrInvalidCredentials
 	}
-	var sess Session
-	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT token_hash, admin_email, role, expires_at
-		FROM %s WHERE token_hash = $1 AND expires_at > NOW()`, s.sessions),
-		hashToken(token),
-	).Scan(&sess.TokenHash, &sess.AdminEmail, &sess.Role, &sess.ExpiresAt)
-	if errors.Is(err, pgx.ErrNoRows) {
+
+	h := hashToken(token)
+	rec, err := database.FindFirst[SessionRecord](ctx, s.db, "sessions", fmt.Sprintf("token_hash = '%s'", h))
+	if err != nil || rec == nil {
 		return nil, ErrInvalidCredentials
 	}
-	if err != nil {
-		return nil, err
+
+	if time.Now().After(rec.ExpiresAt.Time()) {
+		_ = database.DeleteRecord(ctx, s.db, "sessions", rec.ID)
+		return nil, ErrInvalidCredentials
 	}
 
-	sess.Name = s.cfg.AdminName
-	if sess.Name == "" {
-		sess.Name = "Super Admin"
+	name := s.cfg.AdminName
+	if name == "" {
+		name = "Super Admin"
 	}
-	if sess.Role == "" {
-		sess.Role = "super_admin"
+	role := rec.Role
+	if role == "" {
+		role = "super_admin"
 	}
 
-	return &sess, nil
+	return &Session{
+		Token:      token,
+		TokenHash:  rec.TokenHash,
+		AdminEmail: rec.AdminEmail,
+		Role:       role,
+		Name:       name,
+		ExpiresAt:  rec.ExpiresAt.Time(),
+	}, nil
 }
 
 // Logout menghapus sesi.
 func (s *Service) Logout(ctx context.Context, token string) error {
-	if token == "" {
+	if token == "" || s.db == nil {
 		return nil
 	}
-	_, err := s.pool.Exec(ctx,
-		`DELETE FROM `+s.sessions+` WHERE token_hash = $1`, hashToken(token))
-	return err
+	h := hashToken(token)
+	rec, err := database.FindFirst[SessionRecord](ctx, s.db, "sessions", fmt.Sprintf("token_hash = '%s'", h))
+	if err == nil && rec != nil {
+		_ = database.DeleteRecord(ctx, s.db, "sessions", rec.ID)
+	}
+	return nil
 }
 
-// checkLockout membaca tabel login_attempts lokal untuk IP.
+// checkLockout membaca koleksi login_attempts untuk IP.
 func (s *Service) checkLockout(ctx context.Context, ip string) (bool, time.Duration, error) {
-	if s.pool == nil {
+	if s.db == nil {
 		return false, 0, nil
 	}
-	var (
-		attemptCount int
-		lockoutUntil *time.Time
-	)
-	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT attempt_count, lockout_until FROM %s WHERE ip_address = $1`, s.attempts),
-		ip,
-	).Scan(&attemptCount, &lockoutUntil)
-	if errors.Is(err, pgx.ErrNoRows) {
+	rec, err := database.FindFirst[LoginAttempt](ctx, s.db, "login_attempts", fmt.Sprintf("ip_address = '%s'", ip))
+	if err != nil || rec == nil {
 		return false, 0, nil
 	}
-	if err != nil {
-		return false, 0, err
-	}
-	if lockoutUntil != nil && lockoutUntil.After(time.Now()) {
-		return true, time.Until(*lockoutUntil), nil
+	if rec.LockoutUntil != nil && rec.LockoutUntil.Time().After(time.Now()) {
+		wait := time.Until(rec.LockoutUntil.Time())
+		return true, wait, nil
 	}
 	return false, 0, nil
 }
 
-// recordFailure mencatat percobaan gagal; memicu lockout saat mencapai batas.
+// recordFailure mencatat kegagalan login dan memberlakukan lockout jika batas tercapai.
 func (s *Service) recordFailure(ctx context.Context, ip string) {
-	if s.pool == nil {
+	if s.db == nil {
 		return
 	}
-	var (
-		count  int
-		lockAt *time.Time
-	)
-	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT attempt_count, lockout_until FROM %s WHERE ip_address = $1`, s.attempts),
-		ip,
-	).Scan(&count, &lockAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		count = 0
-	}
-
-	newCount := count + 1
-	var newLock *time.Time
-	if newCount >= maxLoginAttempts {
-		t := time.Now().Add(lockoutDuration)
-		newLock = &t
-	}
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		_, err = s.pool.Exec(ctx, fmt.Sprintf(`
-			INSERT INTO %s (ip_address, attempt_count, last_attempt, lockout_until)
-			VALUES ($1, $2, NOW(), $3)
-			ON CONFLICT (ip_address) DO UPDATE SET
-				attempt_count = EXCLUDED.attempt_count,
-				last_attempt = NOW(),
-				lockout_until = EXCLUDED.lockout_until`, s.attempts),
-			ip, newCount, newLock)
+	rec, err := database.FindFirst[LoginAttempt](ctx, s.db, "login_attempts", fmt.Sprintf("ip_address = '%s'", ip))
+	now := time.Now()
+	if err == nil && rec != nil {
+		count := rec.AttemptCount + 1
+		update := map[string]any{
+			"attempt_count": count,
+			"last_attempt":  now.Format(time.RFC3339),
+		}
+		if count >= maxLoginAttempts {
+			update["lockout_until"] = now.Add(lockoutDuration).Format(time.RFC3339)
+		}
+		_, _ = database.UpdateRecord[LoginAttempt](ctx, s.db, "login_attempts", rec.ID, update)
 	} else {
-		_, err = s.pool.Exec(ctx, fmt.Sprintf(`
-			UPDATE %s SET attempt_count = $2, last_attempt = NOW(), lockout_until = $3
-			WHERE ip_address = $1`, s.attempts),
-			ip, newCount, newLock)
-	}
-	if err != nil && s.log != nil {
-		s.log.Error("catat percobaan login gagal", "ip", ip, "error", err)
+		_, _ = database.CreateRecord[LoginAttempt](ctx, s.db, "login_attempts", map[string]any{
+			"ip_address":    ip,
+			"attempt_count": 1,
+			"last_attempt":  now.Format(time.RFC3339),
+		})
 	}
 }
 
-// resetAttempts menghapus catatan percobaan setelah login sukses.
+// resetAttempts menghapus riwayat kegagalan login untuk IP tertentu setelah berhasil login.
 func (s *Service) resetAttempts(ctx context.Context, ip string) {
-	if s.pool == nil {
+	if s.db == nil {
 		return
 	}
-	_, _ = s.pool.Exec(ctx,
-		`DELETE FROM `+s.attempts+` WHERE ip_address = $1`, ip)
+	rec, err := database.FindFirst[LoginAttempt](ctx, s.db, "login_attempts", fmt.Sprintf("ip_address = '%s'", ip))
+	if err == nil && rec != nil {
+		_ = database.DeleteRecord(ctx, s.db, "login_attempts", rec.ID)
+	}
 }
 
-// purgeExpiredSessions membersihkan sesi kedaluwarsa.
+// purgeExpiredSessions membersihkan sesi kedaluwarsa di background.
 func (s *Service) purgeExpiredSessions(ctx context.Context) {
-	if s.pool == nil {
+	if s.db == nil {
 		return
 	}
-	_, _ = s.pool.Exec(ctx, `DELETE FROM `+s.sessions+` WHERE expires_at < NOW()`)
+	nowStr := time.Now().Format("2006-01-02 15:04:05.000Z")
+	filter := fmt.Sprintf("expires_at < '%s'", nowStr)
+	expired, err := database.ListRecords[SessionRecord](ctx, s.db, "sessions", 1, 100, filter, "")
+	if err == nil && expired != nil {
+		for _, sess := range expired.Items {
+			_ = database.DeleteRecord(ctx, s.db, "sessions", sess.ID)
+		}
+	}
 }
 
-// hashToken menghitung SHA-256 token sesi (hanya hash yang disimpan DB).
+// verifyCredentials membandingkan kredensial dengan aman terhadap timing attacks.
+func (s *Service) verifyCredentials(inputUser, inputPassword string) bool {
+	inputUser = strings.ToLower(strings.TrimSpace(inputUser))
+	configuredEmail := strings.ToLower(strings.TrimSpace(s.cfg.AdminEmail))
+	configuredPassword := strings.TrimSpace(s.cfg.AdminPassword)
+
+	userMatches := subtle.ConstantTimeCompare([]byte(inputUser), []byte(configuredEmail)) == 1
+
+	if !userMatches {
+		idx := strings.Index(configuredEmail, "@")
+		if idx > 0 {
+			usernamePrefix := configuredEmail[:idx]
+			if subtle.ConstantTimeCompare([]byte(inputUser), []byte(usernamePrefix)) == 1 {
+				userMatches = true
+			}
+		}
+	}
+
+	if !userMatches && (inputUser == "superadmin" || inputUser == "super_admin") {
+		userMatches = true
+	}
+
+	passMatches := subtle.ConstantTimeCompare([]byte(inputPassword), []byte(configuredPassword)) == 1
+
+	return userMatches && passMatches
+}
+
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
-}
-
-// verifyCredentials memverifikasi username/email dan password super_admin.
-func (s *Service) verifyCredentials(inputUser, password string) bool {
-	if s.cfg == nil || s.cfg.AdminPassword == "" || s.cfg.AdminEmail == "" || password == "" {
-		return false
-	}
-	cleanInput := strings.ToLower(strings.TrimSpace(inputUser))
-	validUser := strings.ToLower(strings.TrimSpace(s.cfg.AdminEmail))
-	userPrefix := validUser
-	if atIdx := strings.Index(validUser, "@"); atIdx != -1 {
-		userPrefix = validUser[:atIdx]
-	}
-
-	isUserValid := (cleanInput == validUser || cleanInput == userPrefix || cleanInput == "superadmin" || cleanInput == "admin")
-	isPassValid := subtle.ConstantTimeCompare([]byte(password), []byte(s.cfg.AdminPassword)) == 1
-
-	return isUserValid && isPassValid
 }

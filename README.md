@@ -55,8 +55,9 @@ Seluruh konfigurasi dikelola terpusat di **Infisical Cloud** (folder `/pengaduan
 | Variabel                     | Dipakai   | Keterangan                                   |
 | ---------------------------- | --------- | -------------------------------------------- |
 | `PORT`, `HOST`               | Backend   | Port HTTP internal (default 8080)            |
-| `DATABASE_URL`               | Backend   | Pooler Supavisor (`:6543`), schema `kemenag-pengaduan` |
-| `DB_SCHEMA`                  | Backend   | Schema aplikasi (`kemenag-pengaduan`)        |
+| `POCKETBASE_URL`             | Backend   | URL database PocketBase sovereign            |
+| `POCKETBASE_ADMIN_EMAIL`     | Backend   | Email superuser/admin PocketBase             |
+| `POCKETBASE_ADMIN_PASSWORD`  | Backend   | Password superuser/admin PocketBase          |
 | `SUPER_ADMIN_EMAIL` / `ADMIN_EMAIL` | Backend | Email / username akun Super Admin       |
 | `SUPER_ADMIN_PASSWORD`       | Backend   | Kata sandi akun Super Admin                  |
 | `SUPER_ADMIN_NAME`           | Backend   | Nama tampilan Super Admin                    |
@@ -91,7 +92,7 @@ Session admin memakai cookie `sid` (HttpOnly, `COOKIE_SECURE=true` di produksi).
 ## Pengujian
 
 ```bash
-# Backend: unit & integration test (TestHealthWithDB butuh DATABASE_URL)
+# Backend: unit & integration test
 cd backend
 go vet ./...
 go test ./...

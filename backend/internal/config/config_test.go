@@ -19,8 +19,8 @@ func TestLoadFromMonorepoRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
-	if cfg.DatabaseURL == "" {
-		t.Error("DATABASE_URL kosong — .env.local root tidak terbaca")
+	if cfg.PocketBaseURL == "" {
+		t.Error("POCKETBASE_URL kosong")
 	}
 	if cfg.SessionSecret == "" {
 		t.Error("SESSION_SECRET kosong")

@@ -26,32 +26,32 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Koneksi database (opsional saat pengembangan tanpa DATABASE_URL).
+	// Inisialisasi koneksi database PocketBase (db-pengaduan)
 	var db *database.DB
-	if cfg.DatabaseURL != "" {
+	if cfg.PocketBaseURL != "" {
 		for attempt := 1; attempt <= 5; attempt++ {
 			connectCtx, connectCancel := context.WithTimeout(ctx, 5*time.Second)
-			db, err = database.Connect(connectCtx, cfg.DatabaseURL, cfg.AppSchema)
+			db, err = database.Connect(connectCtx, cfg.PocketBaseURL, cfg.PocketBaseAdminEmail, cfg.PocketBaseAdminPassword, log)
 			connectCancel()
 			if err == nil {
 				break
 			}
-			log.Warn("percobaan koneksi database gagal, mencoba lagi...", "attempt", attempt, "error", err)
+			log.Warn("percobaan koneksi PocketBase gagal, mencoba lagi...", "attempt", attempt, "error", err)
 			time.Sleep(2 * time.Second)
 		}
 		if err != nil {
-			log.Error("gagal koneksi database setelah 5 percobaan", "error", err)
+			log.Error("gagal koneksi PocketBase setelah 5 percobaan", "error", err)
 			os.Exit(1)
 		}
 		defer db.Close()
 
 		if err := db.Migrate(ctx); err != nil {
-			log.Error("gagal menjalankan migrasi", "error", err)
+			log.Error("gagal verifikasi skema PocketBase", "error", err)
 			os.Exit(1)
 		}
-		log.Info("migrasi database selesai", "schema", cfg.AppSchema)
+		log.Info("koneksi database PocketBase siap", "url", cfg.PocketBaseURL)
 	} else {
-		log.Warn("DATABASE_URL kosong — berjalan tanpa database (health = degraded)")
+		log.Warn("POCKETBASE_URL kosong — berjalan tanpa database (health = degraded)")
 	}
 
 	app := server.New(server.Deps{Cfg: cfg, Log: log, DB: db})

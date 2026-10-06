@@ -2,21 +2,19 @@ package rating
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/database"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/ratelimit"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/validate"
-	"log/slog"
 )
 
 // ErrNotFound menandai tiket tidak ditemukan.
-var ErrNotFound = errors.New("record not found")
+var ErrNotFound = database.ErrNotFound
 
 // Service memuat logika bisnis rating.
 type Service struct {
@@ -32,10 +30,10 @@ func NewService(db *database.DB, log *slog.Logger) *Service {
 
 // RateInput adalah input penilaian.
 type RateInput struct {
-	Ticket       string
-	Rating       int
-	Feedback     string
-	ClientIP     string
+	Ticket   string
+	Rating   int
+	Feedback string
+	ClientIP string
 }
 
 // Rate menyimpan rating dan feedback untuk tiket.
@@ -56,33 +54,48 @@ func (s *Service) Rate(ctx context.Context, in *RateInput) error {
 			fmt.Sprintf("Terlalu banyak permintaan. Coba lagi dalam %d detik.", int(wait.Seconds())+1))
 	}
 
-	var fb *string
-	if feedback != "" {
-		fb = &feedback
+	// Cari pengaduan di PocketBase berdasarkan nomor tiket
+	existing, err := database.FindFirst[map[string]any](ctx, s.db, "pengaduan", fmt.Sprintf("ticket_number = '%s'", in.Ticket))
+	if err != nil || existing == nil {
+		return httpx.NotFound("not_found", "Pengaduan dengan nomor tiket tersebut tidak ditemukan.")
 	}
 
-	ct, err := s.db.Pool.Exec(ctx, `
-		UPDATE `+s.db.Table("pengaduan")+`
-		SET rating = $1, user_feedback = COALESCE($2, user_feedback)
-		WHERE ticket_number = $3`, in.Rating, fb, in.Ticket)
-	if err != nil {
+	idVal, ok := (*existing)["id"]
+	if !ok {
+		return httpx.NotFound("not_found", "Pengaduan tidak valid.")
+	}
+	id := fmt.Sprint(idVal)
+
+	updateData := map[string]any{
+		"rating": in.Rating,
+	}
+	if feedback != "" {
+		updateData["user_feedback"] = feedback
+	}
+
+	if _, err := database.UpdateRecord[map[string]any](ctx, s.db, "pengaduan", id, updateData); err != nil {
 		s.log.Error("update rating gagal", "ticket", in.Ticket, "error", err)
 		return httpx.Internal("db_error", "Gagal menyimpan penilaian.")
-	}
-	if ct.RowsAffected() == 0 {
-		return httpx.NotFound("not_found", "Pengaduan dengan nomor tiket tersebut tidak ditemukan.")
 	}
 	return nil
 }
 
 // HasRated memeriksa apakah tiket sudah diberi rating.
 func (s *Service) HasRated(ctx context.Context, ticket string) (bool, error) {
-	var exists bool
-	err := s.db.Pool.QueryRow(ctx,
-		`SELECT rating IS NOT NULL FROM pengaduan WHERE ticket_number = $1`, ticket,
-	).Scan(&exists)
-	if errors.Is(err, pgx.ErrNoRows) {
+	existing, err := database.FindFirst[map[string]any](ctx, s.db, "pengaduan", fmt.Sprintf("ticket_number = '%s'", ticket))
+	if err != nil || existing == nil {
 		return false, nil
 	}
-	return exists, err
+	ratingVal, ok := (*existing)["rating"]
+	if !ok || ratingVal == nil {
+		return false, nil
+	}
+	switch v := ratingVal.(type) {
+	case float64:
+		return v > 0, nil
+	case int:
+		return v > 0, nil
+	default:
+		return false, nil
+	}
 }

@@ -2,79 +2,68 @@ package admin
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/database"
 )
 
 // ListTemplates mengambil seluruh template tanggapan.
 func (r *Repository) ListTemplates(ctx context.Context) ([]Template, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id::text, title, status_target, content, created_at, updated_at
-		FROM `+r.templatesTable+`
-		ORDER BY created_at ASC`)
+	res, err := database.ListRecords[Template](ctx, r.db, "templates", 1, 500, "", "created_at")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	items := make([]Template, 0)
-	for rows.Next() {
-		var t Template
-		if err := rows.Scan(&t.ID, &t.Title, &t.StatusTarget, &t.Content, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, t)
+	if res.Items == nil {
+		return []Template{}, nil
 	}
-	return items, rows.Err()
+	return res.Items, nil
+}
+
+// FindTemplateByID mengambil template berdasarkan ID atau original_id.
+func (r *Repository) FindTemplateByID(ctx context.Context, id string) (*Template, error) {
+	tpl, err := database.GetRecord[Template](ctx, r.db, "templates", id)
+	if err == nil {
+		return tpl, nil
+	}
+	return database.FindFirst[Template](ctx, r.db, "templates", fmt.Sprintf("original_id = '%s'", id))
 }
 
 // CreateTemplate menambahkan template tanggapan baru.
 func (r *Repository) CreateTemplate(ctx context.Context, title, statusTarget, content string) (*Template, error) {
-	var t Template
-	err := r.pool.QueryRow(ctx, `
-		INSERT INTO `+r.templatesTable+` (title, status_target, content)
-		VALUES ($1, $2, $3)
-		RETURNING id::text, title, status_target, content, created_at, updated_at`,
-		title, statusTarget, content,
-	).Scan(&t.ID, &t.Title, &t.StatusTarget, &t.Content, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
-		return nil, err
+	record := map[string]any{
+		"title":         title,
+		"status_target": statusTarget,
+		"content":       content,
 	}
-	return &t, nil
+	return database.CreateRecord[Template](ctx, r.db, "templates", record)
 }
 
 // UpdateTemplate mengubah template tanggapan.
-func (r *Repository) UpdateTemplate(ctx context.Context, id uuid.UUID, title, statusTarget, content *string) (*Template, error) {
-	var t Template
-	err := r.pool.QueryRow(ctx, `
-		UPDATE `+r.templatesTable+`
-		SET title = CASE WHEN $1::text IS NOT NULL THEN $1 ELSE title END,
-			status_target = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE status_target END,
-			content = CASE WHEN $3::text IS NOT NULL THEN $3 ELSE content END,
-			updated_at = NOW()
-		WHERE id = $4
-		RETURNING id::text, title, status_target, content, created_at, updated_at`,
-		title, statusTarget, content, id,
-	).Scan(&t.ID, &t.Title, &t.StatusTarget, &t.Content, &t.CreatedAt, &t.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
+func (r *Repository) UpdateTemplate(ctx context.Context, id string, title, statusTarget, content *string) (*Template, error) {
+	existing, err := r.FindTemplateByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return &t, nil
+
+	updateData := map[string]any{}
+	if title != nil {
+		updateData["title"] = *title
+	}
+	if statusTarget != nil {
+		updateData["status_target"] = *statusTarget
+	}
+	if content != nil {
+		updateData["content"] = *content
+	}
+
+	return database.UpdateRecord[Template](ctx, r.db, "templates", existing.ID, updateData)
 }
 
 // DeleteTemplate menghapus template tanggapan.
-func (r *Repository) DeleteTemplate(ctx context.Context, id uuid.UUID) error {
-	ct, err := r.pool.Exec(ctx, `DELETE FROM `+r.templatesTable+` WHERE id = $1`, id)
+func (r *Repository) DeleteTemplate(ctx context.Context, id string) error {
+	existing, err := r.FindTemplateByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	if ct.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return database.DeleteRecord(ctx, r.db, "templates", existing.ID)
 }

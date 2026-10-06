@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/validate"
 )
@@ -49,8 +48,8 @@ func (h *Handler) CreateTemplate(c fiber.Ctx) error {
 
 // UpdateTemplate menangani PATCH /api/v1/admin/templates/:id.
 func (h *Handler) UpdateTemplate(c fiber.Ctx) error {
-	id, err := uuid.Parse(c.Params("id"))
-	if err != nil {
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
 		return httpx.WriteError(c, httpx.BadRequest("invalid_id", "ID template tidak valid."))
 	}
 
@@ -76,8 +75,8 @@ func (h *Handler) UpdateTemplate(c fiber.Ctx) error {
 
 // DeleteTemplate menangani DELETE /api/v1/admin/templates/:id.
 func (h *Handler) DeleteTemplate(c fiber.Ctx) error {
-	id, err := uuid.Parse(c.Params("id"))
-	if err != nil {
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
 		return httpx.WriteError(c, httpx.BadRequest("invalid_id", "ID template tidak valid."))
 	}
 

@@ -2,37 +2,51 @@ package admin
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/database"
 )
+
+// SettingItem mewakili baris konfigurasi di koleksi settings.
+type SettingItem struct {
+	ID    string `json:"id"`
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
 
 // GetSettings mengambil semua konfigurasi tersimpan.
 func (r *Repository) GetSettings(ctx context.Context) (map[string]string, error) {
-	rows, err := r.pool.Query(ctx, `SELECT key, value FROM `+r.settingsTable)
+	res, err := database.ListRecords[SettingItem](ctx, r.db, "settings", 1, 500, "", "")
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	settings := make(map[string]string)
-	for rows.Next() {
-		var k, v string
-		if err := rows.Scan(&k, &v); err == nil {
-			settings[k] = v
-		}
+	for _, it := range res.Items {
+		settings[it.Key] = it.Value
 	}
-	return settings, rows.Err()
+	return settings, nil
 }
 
 // UpdateSettings menyimpan atau memperbarui daftar pengaturan.
 func (r *Repository) UpdateSettings(ctx context.Context, settings map[string]string) error {
 	for k, v := range settings {
-		_, err := r.pool.Exec(ctx, `
-			INSERT INTO `+r.settingsTable+` (key, value, updated_at)
-			VALUES ($1, $2, NOW())
-			ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-			k, v,
-		)
-		if err != nil {
-			return err
+		existing, err := database.FindFirst[SettingItem](ctx, r.db, "settings", fmt.Sprintf("key = '%s'", k))
+		if err == nil && existing != nil {
+			_, err = database.UpdateRecord[SettingItem](ctx, r.db, "settings", existing.ID, map[string]any{
+				"value": v,
+			})
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err = database.CreateRecord[SettingItem](ctx, r.db, "settings", map[string]any{
+				"key":   k,
+				"value": v,
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

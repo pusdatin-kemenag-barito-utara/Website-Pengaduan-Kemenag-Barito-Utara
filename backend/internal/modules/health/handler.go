@@ -75,63 +75,31 @@ func (h *Handler) AppStatus(c fiber.Ctx) error {
 	isMaintenance := false
 	appName := "Pengaduan SI-GESIT"
 
-	if h.db != nil && h.db.Pool != nil {
+	if h.db != nil {
 		ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
 		defer cancel()
 
-		var dbStatus, dbName string
-		err := h.db.Pool.QueryRow(ctx, `
-			SELECT status, name
-			FROM kemenag_pusdatin.satellite_apps
-			WHERE id = 'si_gesit' OR schema_name = $1
-			LIMIT 1`,
-			h.cfg.AppSchema,
-		).Scan(&dbStatus, &dbName)
-
-		if err == nil {
-			if dbName != "" {
-				appName = dbName
-			}
-			dbStatusClean := strings.ToLower(strings.TrimSpace(dbStatus))
-			if dbStatusClean == "maintenance" {
+		type SettingVal struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		}
+		item, err := database.FindFirst[SettingVal](ctx, h.db, "settings", "key = 'maintenance_mode'")
+		if err == nil && item != nil {
+			val := strings.ToLower(strings.TrimSpace(item.Value))
+			if val == "true" || val == "1" || val == "maintenance" {
 				status = "maintenance"
 				isMaintenance = true
-			} else {
-				status = "online"
-				isMaintenance = false
 			}
-
-			// Simpan ke in-memory cache
-			h.cacheMu.Lock()
-			h.cache = cachedStatusInfo{
-				status:        status,
-				isMaintenance: isMaintenance,
-				appName:       appName,
-				fetchedAt:     time.Now(),
-			}
-
-			// Throttled update last_health_check (maksimal 1x per 60 detik)
-			shouldUpdateDB := time.Since(h.lastDBPing) >= 60*time.Second
-			if shouldUpdateDB {
-				h.lastDBPing = time.Now()
-			}
-			h.cacheMu.Unlock()
-
-			if shouldUpdateDB {
-				go func() {
-					bgCtx, bgCancel := context.WithTimeout(context.Background(), 3*time.Second)
-					defer bgCancel()
-					_, _ = h.db.Pool.Exec(bgCtx, `
-						UPDATE kemenag_pusdatin.satellite_apps
-						SET last_health_check = NOW()
-						WHERE id = 'si_gesit' OR schema_name = $1`,
-						h.cfg.AppSchema,
-					)
-				}()
-			}
-		} else {
-			h.log.Debug("info satellite_apps pusdatin dilewati / fallback", "error", err)
 		}
+
+		h.cacheMu.Lock()
+		h.cache = cachedStatusInfo{
+			status:        status,
+			isMaintenance: isMaintenance,
+			appName:       appName,
+			fetchedAt:     time.Now(),
+		}
+		h.cacheMu.Unlock()
 	}
 
 	c.Set("Cache-Control", "public, max-age=5, s-maxage=10, stale-while-revalidate=30")
@@ -159,7 +127,7 @@ func (h *Handler) Health(c fiber.Ctx) error {
 			dbConnected = true
 		}
 	} else {
-		dbError = "DATABASE_URL belum dikonfigurasi"
+		dbError = "POCKETBASE_URL belum dikonfigurasi"
 	}
 
 	latency := time.Since(start).Milliseconds()
@@ -178,7 +146,7 @@ func (h *Handler) Health(c fiber.Ctx) error {
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 		"database": fiber.Map{
 			"connected": dbConnected,
-			"schema":    h.cfg.AppSchema,
+			"type":      "pocketbase",
 			"error":     dbError,
 		},
 		"latency_ms": latency,

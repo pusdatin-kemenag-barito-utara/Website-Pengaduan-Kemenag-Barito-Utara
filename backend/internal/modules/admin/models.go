@@ -1,14 +1,13 @@
 package admin
 
 import (
-	"errors"
 	"time"
 
-	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/validate"
+	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/database"
 )
 
 // ErrNotFound menandai data tidak ditemukan.
-var ErrNotFound = errors.New("record not found")
+var ErrNotFound = database.ErrNotFound
 
 // ListFilter untuk query daftar pengaduan.
 type ListFilter struct {
@@ -29,33 +28,34 @@ type ListResult struct {
 
 // Item adalah pengaduan untuk tampilan admin.
 type Item struct {
-	ID            string    `json:"id"`
-	TicketNumber  string    `json:"ticket_number"`
-	Category      string    `json:"category"`
-	ServiceUnit   string    `json:"service_unit"`
-	FullName      *string   `json:"full_name,omitempty"`
-	PhoneNumber   string    `json:"phone_number"`
-	Content       string    `json:"content"`
-	IsAnonymous   bool      `json:"is_anonymous"`
-	Status        string    `json:"status"`
-	AdminResponse *string   `json:"admin_response,omitempty"`
-	FileKey       *string   `json:"file_url,omitempty"`
-	Rating        *int16    `json:"rating,omitempty"`
-	UserFeedback  *string   `json:"user_feedback,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            string           `json:"id"`
+	OriginalID    string           `json:"original_id,omitempty"`
+	TicketNumber  string           `json:"ticket_number"`
+	Category      string           `json:"category"`
+	ServiceUnit   string           `json:"service_unit"`
+	FullName      *string          `json:"full_name,omitempty"`
+	PhoneNumber   string           `json:"phone_number"`
+	Content       string           `json:"content"`
+	IsAnonymous   bool             `json:"is_anonymous"`
+	Status        string           `json:"status"`
+	AdminResponse *string          `json:"admin_response,omitempty"`
+	FileKey       *string          `json:"file_url,omitempty"`
+	Rating        *int16           `json:"rating,omitempty"`
+	UserFeedback  *string          `json:"user_feedback,omitempty"`
+	CreatedAt     database.PBTime  `json:"created_at"`
+	UpdatedAt     database.PBTime  `json:"updated_at"`
 }
 
 // RatingItem mewakili pengaduan yang telah diberi rating/ulasan.
 type RatingItem struct {
-	ID           string    `json:"id"`
-	TicketNumber string    `json:"ticket_number"`
-	Category     string    `json:"category"`
-	ServiceUnit  string    `json:"service_unit"`
-	FullName     *string   `json:"full_name,omitempty"`
-	Rating       int       `json:"rating"`
-	UserFeedback *string   `json:"user_feedback,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           string           `json:"id"`
+	TicketNumber string           `json:"ticket_number"`
+	Category     string           `json:"category"`
+	ServiceUnit  string           `json:"service_unit"`
+	FullName     *string          `json:"full_name,omitempty"`
+	Rating       int              `json:"rating"`
+	UserFeedback *string          `json:"user_feedback,omitempty"`
+	CreatedAt    database.PBTime  `json:"created_at"`
 }
 
 // RatingStats mewakili metrik IKM dan distribusi rating.
@@ -79,12 +79,13 @@ type RatingResult struct {
 
 // Template mewakili template tanggapan admin.
 type Template struct {
-	ID           string    `json:"id"`
-	Title        string    `json:"title"`
-	StatusTarget string    `json:"status_target"`
-	Content      string    `json:"content"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string           `json:"id"`
+	OriginalID   string           `json:"original_id,omitempty"`
+	Title        string           `json:"title"`
+	StatusTarget string           `json:"status_target"`
+	Content      string           `json:"content"`
+	CreatedAt    database.PBTime  `json:"created_at"`
+	UpdatedAt    database.PBTime  `json:"updated_at"`
 }
 
 // ReportSummary mewakili rekapitulasi data untuk laporan kedinasan.
@@ -99,6 +100,3 @@ type ReportSummary struct {
 	Items         []Item         `json:"items"`
 	GeneratedAt   time.Time      `json:"generated_at"`
 }
-
-// ValidateStatus memeriksa status yang diizinkan.
-func ValidateStatus(s string) bool { return validate.Status(s) }

@@ -2,9 +2,9 @@ package layanan
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/httpx"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/validate"
 )
@@ -89,8 +89,8 @@ func (h *Handler) Create(c fiber.Ctx) error {
 
 // Update menangani PATCH /api/v1/admin/layanan/:id.
 func (h *Handler) Update(c fiber.Ctx) error {
-	id, err := uuid.Parse(c.Params("id"))
-	if err != nil {
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
 		return httpx.WriteError(c, httpx.BadRequest("invalid_id", "ID layanan tidak valid."))
 	}
 
@@ -130,8 +130,8 @@ func (h *Handler) Update(c fiber.Ctx) error {
 
 // Delete menangani DELETE /api/v1/admin/layanan/:id.
 func (h *Handler) Delete(c fiber.Ctx) error {
-	id, err := uuid.Parse(c.Params("id"))
-	if err != nil {
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
 		return httpx.WriteError(c, httpx.BadRequest("invalid_id", "ID layanan tidak valid."))
 	}
 	if err := h.repo.Delete(c.Context(), id); err != nil {
@@ -143,7 +143,7 @@ func (h *Handler) Delete(c fiber.Ctx) error {
 // Reorder menangani PUT /api/v1/admin/layanan/reorder.
 func (h *Handler) Reorder(c fiber.Ctx) error {
 	var body struct {
-		Ids []uuid.UUID `json:"ids"`
+		Ids []string `json:"ids"`
 	}
 	if err := c.Bind().Body(&body); err != nil {
 		return httpx.WriteError(c, httpx.BadRequest("invalid_json", "Body JSON tidak valid."))

@@ -25,10 +25,10 @@ Browser (Masyarakat / Admin)
 └──────┬──────────────┬───────┘
        │              │
        ▼              ▼
-   PostgreSQL      Cloudflare R2
-   (pgx v5)        (lampiran file)
-   schema:
-   kemenag-pengaduan (tabel pengaduan, layanan, sessions, login_attempts)
+   PocketBase      Cloudflare R2
+   (db-pengaduan)  (lampiran file)
+   collections:
+   layanan, pengaduan, templates, settings, login_attempts, sessions
 ```
 
 ## Keputusan Desain
@@ -40,8 +40,8 @@ Browser (Masyarakat / Admin)
 - **BE**: modular monolith Go. Setiap domain punya paket sendiri
   (`handler → service → repository → dto`) dan tidak saling mencampur logika.
   Hanya `internal/pkg/*` yang dibagi (infrastruktur murni).
-- **DB**: akses langsung Postgres via pgx (bukan REST Supabase). RLS tidak
-  dipakai; otorisasi sepenuhnya di layer service Go.
+- **DB**: PocketBase terisolasi mandiri (`db-pengaduan.kemenag-baritoutara.com`).
+  Zero dependency ke Supabase; database sovereign, cepat, dan ringan.
 - **Storage**: hanya Cloudflare R2. Upload dilakukan setelah row tersimpan
   (rollback jika gagal); penghapusan tiket ikut menghapus file.
 - **Auth**: session token acak (hash SHA-256 di tabel `sessions`), cookie
@@ -84,5 +84,4 @@ GET    /api/v1/health                     health check
 
 ## Migrasi Database
 
-Migration SQL berada di `backend/internal/database/migrations/` dan
-dijalankan otomatis saat server start (dicatat di tabel `schema_migrations`).
+Database dikelola melalui PocketBase collections (`layanan`, `pengaduan`, `templates`, `settings`, `login_attempts`, `sessions`). Verifikasi ketersediaan koleksi dijalankan otomatis saat startup server oleh `db.Migrate(ctx)`. Skrip setup inisial dan ETL data tersedia di folder `scripts/`.

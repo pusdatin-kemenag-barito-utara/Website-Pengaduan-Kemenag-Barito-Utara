@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/config"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/idgen"
 	"github.com/kemenag-baritoutara/pengaduan-kemenag/backend/internal/pkg/ratelimit"
@@ -109,7 +108,6 @@ func (s *Service) Submit(ctx context.Context, in *SubmitInput) (string, error) {
 	}
 
 	entity := &Entity{
-		ID:           uuid.New(),
 		TicketNumber: "",
 		Category:     in.Category,
 		ServiceUnit:  strings.TrimSpace(in.ServiceUnit),
@@ -175,6 +173,18 @@ func (s *Service) Track(ctx context.Context, ticket string) (*TrackResult, error
 		return nil, httpx.Internal("db_error", "Gagal mengambil data pengaduan.")
 	}
 
+	createdAt := e.CreatedAt.Time()
+	if createdAt.IsZero() {
+		if len(e.TicketNumber) >= 12 && strings.HasPrefix(e.TicketNumber, "SGT-") {
+			if t, err := time.Parse("20060102", e.TicketNumber[4:12]); err == nil {
+				createdAt = t
+			}
+		}
+		if createdAt.IsZero() {
+			createdAt = e.UpdatedAt.Time()
+		}
+	}
+
 	res := &TrackResult{
 		TicketNumber:  e.TicketNumber,
 		Category:      e.Category,
@@ -187,8 +197,8 @@ func (s *Service) Track(ctx context.Context, ticket string) (*TrackResult, error
 		AdminResponse: e.AdminResponse,
 		Rating:        e.Rating,
 		UserFeedback:  e.UserFeedback,
-		CreatedAt:     e.CreatedAt,
-		UpdatedAt:     e.UpdatedAt,
+		CreatedAt:     createdAt,
+		UpdatedAt:     e.UpdatedAt.Time(),
 	}
 
 	if e.FileKey != nil && *e.FileKey != "" {

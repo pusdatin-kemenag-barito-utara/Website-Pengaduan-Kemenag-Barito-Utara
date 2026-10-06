@@ -26,7 +26,7 @@ var Version = "0.1.0"
 type Deps struct {
 	Cfg *config.Config
 	Log *slog.Logger
-	DB  *database.DB // boleh nil bila DATABASE_URL belum dikonfigurasi
+	DB  *database.DB // boleh nil bila POCKETBASE_URL belum dikonfigurasi
 }
 
 // New membangun aplikasi Fiber v3 lengkap.
@@ -90,16 +90,16 @@ func New(deps Deps) *fiber.App {
 		rating.NewHandler(rating.NewService(deps.DB, deps.Log)).Register(api)
 
 		layananHandler := layanan.NewHandler(
-			layanan.NewRepository(deps.DB.Pool, deps.Cfg.AppSchema, deps.Log),
+			layanan.NewRepository(deps.DB, deps.Log),
 		)
 		layananHandler.RegisterPublic(api)
 
 		adminHandler := admin.NewHandler(
-			admin.NewRepository(deps.DB.Pool, deps.Cfg.AppSchema, deps.Log),
+			admin.NewRepository(deps.DB, deps.Log),
 			storageClient, deps.Log,
 		)
 
-		authSvc := auth.NewService(deps.DB.Pool, deps.Cfg, deps.Log, deps.Cfg.AppSchema)
+		authSvc := auth.NewService(deps.DB, deps.Cfg, deps.Log)
 		authHandler := auth.NewHandler(authSvc, deps.Cfg, deps.Log)
 		authHandler.Register(api)
 

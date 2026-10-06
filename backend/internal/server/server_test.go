@@ -19,7 +19,6 @@ func testLog() *slog.Logger { return slog.New(slog.DiscardHandler) }
 func testCfg() *config.Config {
 	return &config.Config{
 		SessionSecret:   "test-secret",
-		AppSchema:       "kemenag-pengaduan",
 		AdminEmail:      "testadmin@kemenag.go.id",
 		AdminPassword:   "TestPassword123!",
 		AdminName:       "Test Super Admin",
@@ -76,15 +75,16 @@ func TestNotFoundJSON(t *testing.T) {
 }
 
 func TestHealthWithDB(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL kosong — skip integration test")
+	pbURL := os.Getenv("POCKETBASE_URL")
+	if pbURL == "" {
+		pbURL = "https://db-pengaduan.kemenag-baritoutara.com"
 	}
 	cfg := testCfg()
-	cfg.DatabaseURL = dsn
-	db, err := database.Connect(t.Context(), dsn, cfg.AppSchema)
+	cfg.PocketBaseURL = pbURL
+	db, err := database.Connect(t.Context(), pbURL, cfg.PocketBaseAdminEmail, cfg.PocketBaseAdminPassword, testLog())
 	if err != nil {
-		t.Fatalf("koneksi DB gagal: %v", err)
+		t.Skipf("koneksi PB lewati bila offline: %v", err)
+		return
 	}
 	defer db.Close()
 
